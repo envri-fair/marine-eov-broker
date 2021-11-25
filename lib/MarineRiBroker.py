@@ -24,7 +24,17 @@ class MarineBroker:
     ERDDAP_OUTPUT_FORMATS = ["csv", "geoJson", "json", "nc", "ncCF", "odvTxt"]
     EOV_LIST = ['EV_OXY', 'EV_SEATEMP', 'EV_SALIN', 'EV_CURR', 'EV_CHLA', 'EV_CO2', 'EV_NUTS']
     DEFAULT_ERDDAP_SERVERS = {
-        "https://www.ifremer.fr/erddap": ["ArgoFloats", "ArgoFloats-synthetic-BGC", "SDC_GLO_AGG_V2", "SDC_GLO_CLIM_TS_V2_1", "SDC_GLO_CLIM_TS_V2_2"],
+        "https://www.ifremer.fr/erddap": ["ArgoFloats", "ArgoFloats-synthetic-BGC", 
+                                          "SDC_BAL_CLIM_TS_V2_m", "SDC_BAL_CLIM_TS_V2_s",
+                                          "SDC_GLO_AGG_V2", 
+                                          "SDC_GLO_CLIM_TS_V2_1", "SDC_GLO_CLIM_TS_V2_2",
+                                          "SDC_BLS_CLIM_TS_V2_m", "SDC_BLS_CLIM_TS_V2_s",
+                                          "SDC_MED_CLIM_TS_V2_m_pre_post_emt",
+                                          "SDC_MED_CLIM_TS_V2_m_whole_period",
+                                          "SDC_MED_CLIM_TS_V2_s_decades",
+                                          "SDC_MED_CLIM_TS_V2_s_pre_post_emt",
+                                          "SDC_MED_CLIM_TS_V2_s_whole_period",
+                                          "SDC_NAT_CLIM_TS_V2_050_m", "SDC_NAT_CLIM_TS_V2_050_s"],
         "http://erddap.emso.eu/erddap": None,
         "https://erddap.icos-cp.eu/erddap": None
     }
@@ -182,22 +192,12 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
         if len(found_vars) == 0:
             found_vars = [dataset.parameters[i] for i in P02 if i in dataset.parameters.keys()]
             
-        if found_vars is not None:
+        if found_vars is not None and len(found_vars) > 0:
+#             logging.debug(f"Found vars for dataset {dataset.name} : {np.unique(found_vars)}")
             return np.unique(found_vars)
         else:
-            return None
-#         for v in eov_vocabs["results"]["bindings"]:
-#             try:
-#                 found_varname = dataset.metadata[
-#                     (dataset.metadata["Attribute Name"] == "sdn_parameter_urn") &
-#                     (dataset.metadata["Value"] == v["P01notation"]["value"])
-#                 ]["Variable Name"].unique()
-#                 if len(found_varname) > 0:
-#                     logger.debug(f"Found {found_varname[0]} in {dataset.name}")
-#                     logger.debug(f"sdn_parameter_urn is {v['P01notation']['value']}")
-#                     return found_varname[0]
-#             except KeyError:
-#                 logger.debug(dataset.name)
+#             logging.debug(f"No vars found for dataset {dataset.name}")
+            return []
             
         # Nothing was found while looping through vocabularies:
         return None
@@ -238,18 +238,17 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
         start = time.time()
         for eov in eovs:
             variables_found.extend(self.find_eov_in_dataset(dataset, self.vocabularies[eov]))
-        logger.debug(f"Looking for eovs in {dataset.name} took {time.time() - start} seconds")
+        logger.debug(f"Looking for eovs in {dataset.name} took {time.time() - start} seconds with result : {variables_found}")
 
         # Filter out None values
         variables_found = [v for v in variables_found if v]
 
         if len(variables_found) == 0:
+            logger.debug(f"Will discard dataset {dataset.name} because no variables found.")
             return None
 
         if dataset.covers_spatiotemporal_query(query_start_date, query_end_date, query_min_lon, query_min_lat, query_max_lon, query_max_lat):
-            request = ErddapRequest(dataset.name,
-                                    dataset.metadata,
-                                    dataset.data_url,
+            request = ErddapRequest(dataset,
                                     variables_found,
                                     query_min_lon,
                                     query_min_lat,
@@ -298,10 +297,10 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
         
         # Spatial inputs
         try:
-            float(query_min_lon)
-            float(query_min_lat)
-            float(query_max_lon)
-            float(query_max_lat)
+            query_min_lon = float(query_min_lon)
+            query_min_lat = float(query_min_lat)
+            query_max_lon = float(query_max_lon)
+            query_max_lat = float(query_max_lat)
         except ValueError:
             raise ValueError("At least one of input spatial coordinates provided is invalid. Provide float-convertible values.")
         
@@ -341,38 +340,7 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
                 result = future.result()
                 if result is not None:
                     queries.append(result)
-#             variables_found = []
-            
-#             with concurrent.futures.ThreadPoolExecutor(20) as executor:
-#                 futures = []
-#                 for eov in eovs:
-#                     futures.append(executor.submit(self.find_eov_in_dataset, dataset, self.vocabularies[eov]))
-                    
-#                 for future in concurrent.futures.as_completed(futures):
-#                     variables_found.append(future.result())
-#             logger.debug(f"Looking for eovs in {dataset.name} took {time.time() - start} seconds")
-# #                 variables_found.append(self.find_eov_in_dataset(dataset, self.vocabularies[eov]))
-                
-            
-#             variables_found = [v for v in variables_found if v]
-            
-#             if len(variables_found) == 0:
-#                 continue
-            
-#             if dataset.covers_spatiotemporal_query(query_start_date, query_end_date, query_min_lon, query_min_lat, query_max_lon, query_max_lat):
-#                 request = ErddapRequest(dataset.name,
-#                                         dataset.metadata,
-#                                         dataset.data_url,
-#                                         variables_found,
-#                                         query_min_lon,
-#                                         query_min_lat,
-#                                         query_max_lon,
-#                                         query_max_lat,
-#                                         query_start_date,
-#                                         query_end_date,
-#                                         output_format
-#                                        )
-#                 queries.append(request)
+
             logger.debug(f"Handling dataset {dataset} took {time.time() - start} seconds")
         
         return queries
@@ -383,9 +351,7 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
 class ErddapRequest:
     
     def __init__(self, 
-                 dataset_name,
-                 dataset_metadata,
-                 data_url, 
+                 dataset, 
                  query_variables, 
                  query_min_lon, 
                  query_min_lat, 
@@ -396,24 +362,44 @@ class ErddapRequest:
                  output_format
                 ):
         
-        self.dataset_name = dataset_name
-        self.dataset_metadata = dataset_metadata
-        self.data_url = data_url
+        self.dataset = dataset
         self.query_variables = query_variables
-        self.query_min_lon = query_min_lon
-        self.query_min_lat = query_min_lat
-        self.query_max_lon = query_max_lon
-        self.query_max_lat = query_max_lat
+        
+        # If the protocol is griddap, we must adjust the query to fit the dataset bbox
+        # otherwise, Erddap will return an error.
+        # If the query is ok or the protocol is tabldap, we leave the min/max lon/lat values requested.
+        if dataset.protocol == "griddap" and query_min_lon < dataset.min_lon:
+            self.query_min_lon = dataset.min_lon
+        else:
+            self.query_min_lon = query_min_lon
+        if dataset.protocol == "griddap" and query_min_lat < dataset.min_lat:
+            logger.debug(f"{query_min_lat} >= {self.dataset.min_lat} ???? {self.dataset.name}")
+            self.query_min_lat = dataset.min_lat
+        else:
+            logger.debug(f"{query_min_lat} <= {self.dataset.min_lat} ????!!!! {self.dataset.name}")
+            self.query_min_lat = query_min_lat
+        if dataset.protocol == "griddap" and query_max_lon > dataset.max_lon:
+            self.query_max_lon = dataset.max_lon
+        else:
+            self.query_max_lon = query_max_lon
+        if dataset.protocol == "griddap" and query_max_lat > dataset.max_lat:
+            self.query_max_lat = dataset.max_lat
+        else:
+            self.query_max_lat = query_max_lat
+               
         self.query_start_date = query_start_date
         self.query_end_date = query_end_date
         self.output_format = output_format
-        try:
-            self.query_url = self.build_url()
-        except:
-            logger.error(self.query_variables)
+        
+#         try:
+        self.query_url = self.build_url(output_format=output_format)
+#         except:
+#             logger.error(self.query_variables)
+            
+        self.data = None
         
     
-    def build_url(self, output_format=None):
+    def build_url(self, output_format=""):
         """
         Build the data URL with defaults constraints provided at initialization.
         The output format chosen at request time can be modified.
@@ -422,16 +408,30 @@ class ErddapRequest:
         
         output_format -- string for an alternative output format.
         """
-        if output_format is None:
-            output_format = self.output_format
+        query_string = ""
         
-        return (f"{self.data_url}.{output_format}"
-                 f"?time%2Clatitude%2Clongitude%2C{'%2C'.join(self.query_variables)}"
-                 f"&time%3E={self.query_start_date}&time%3C={self.query_end_date}"
-                 f"&latitude%3E={self.query_min_lat}&latitude%3C={self.query_max_lat}&longitude%3E={self.query_min_lon}&longitude%3C={self.query_max_lon}")
+        if self.dataset.protocol == "tabledap":
+            query_string = (f"{self.dataset.data_url}.{output_format}"
+                            f"?time%2Clatitude%2Clongitude%2C{'%2C'.join(self.query_variables)}"
+                            f"&time%3E={self.query_start_date}&time%3C={self.query_end_date}"
+                            f"&latitude%3E={self.query_min_lat}&latitude%3C={self.query_max_lat}&longitude%3E={self.query_min_lon}&longitude%3C={self.query_max_lon}")
+
+        else:            
+            query_string = f"{self.dataset.data_url}.{output_format}?"
+            for variable in self.query_variables:
+                query_string += f'{variable}[({self.query_start_date}):1:({self.query_end_date})]'
+                if len(self.dataset.wms_elevation_values) > 0:
+                    query_string += f'[({self.dataset.wms_elevation_values[0]}):1:({self.dataset.wms_elevation_values[-1]})]'
+                query_string += f'[({self.query_min_lat}):1:({self.query_max_lat})]'
+                query_string += f'[({self.query_min_lon}):1:({self.query_max_lon})],'
+                
+            query_string = query_string.rstrip(',')
+        return query_string
 
     
     def to_pandas_dataframe(self):
+#         if self.data is None:
+#             self.data = 
         return pd.read_csv(self.build_url(output_format="csv"))
     
     def to_xarray(self):
