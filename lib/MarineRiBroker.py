@@ -15,13 +15,14 @@ INPUT_DATE_FORMATS = ["%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%SZ",
                       "%Y%m%dT%H:%M:%SZ", "%Y-%m-%dT%H%M%SZ", 
                       "%Y%m%d", "%Y-%m-%d"]
 
+ERDDAP_OUTPUT_FORMATS = ["csv", "geoJson", "json", "nc", "ncCF", "odvTxt"]
+
 logger = logging.getLogger(__name__)
 
 
 class MarineBroker:
     
     vocabularies_server = "https://vocab.nerc.ac.uk/sparql/"
-    ERDDAP_OUTPUT_FORMATS = ["csv", "geoJson", "json", "nc", "ncCF", "odvTxt"]
     EOV_LIST = ['EV_OXY', 'EV_SEATEMP', 'EV_SALIN', 'EV_CURR', 'EV_CHLA', 'EV_CO2', 'EV_NUTS']
     DEFAULT_ERDDAP_SERVERS = {
         "https://www.ifremer.fr/erddap": ["ArgoFloats", "ArgoFloats-synthetic-BGC", 
@@ -43,14 +44,13 @@ class MarineBroker:
         """Create a new broker and automatically scan Erddap servers provided.
         
         Keyword arguments:
-        erddap_servers -- List of url strings for each erddap server to query. (default ["https://www.ifremer.fr/erddap", "http://erddap.emso.eu/erddap", "https://erddap.icos-cp.eu/erddap"]
-        
+        erddap_servers -- Dict containing Erddap servers URL as keys and lists of dataset IDs as values 
+                          (if value is None, then all datasets will be collected by the broker)
         """
 #         self.erddap_servers = erddap_servers        
         self.datasets_list = []
         self.datasets = []
         self.vocabularies = {}
-
         
         with concurrent.futures.ThreadPoolExecutor(10) as executor:
             futures = []
@@ -68,18 +68,14 @@ class MarineBroker:
             else:
                 self.find_datasets_in_erddap_server(erddap_server)
         
-#         for erddap_server in self.erddap_servers:
-#             self.find_datasets_in_erddap_server(erddap_server)
-        
         with concurrent.futures.ThreadPoolExecutor(5) as executor:
             futures = []
             for erddap_server, dataset_id in self.datasets_list:
-                futures.append(executor.submit(self.get_dataset_metadata, erddap_server, dataset_id))
+                futures.append(executor.submit(self.get_dataset, erddap_server, dataset_id))
                 
             for future in concurrent.futures.as_completed(futures):
                 self.datasets.append(future.result())
     
-
             
     def find_datasets_in_erddap_server(self, erddap_server) -> None:
         """
@@ -102,13 +98,24 @@ class MarineBroker:
         
         logger.debug(f"Took {time.time() - start} seconds to get datasets list for {erddap_server}")
         
-    def get_dataset_metadata(self, erddap_server, dataset_id):
+    def get_dataset(self, erddap_server, dataset_id):
+        """
+        Creates an ErddapDataset object from an Erddap dataset.
+        Arguments:
+        erddap_server : (str) Erddap server URL
+        dataset_id : (str) Erddap dataset ID
+        """
         start = time.time()
         erddap_dataset = ErddapMarineRI.ErddapDataset(erddap_server, dataset_id)
         logger.debug(f"Loaded {dataset_id} in {time.time() - start} seconds.")
         return erddap_dataset  
     
     def build_vocabularies(self, eov) -> dict:
+        """
+        Wrapper for query_vocabularies()
+        Argument :
+        eov: (str) Essential Ocean Variable name
+        """
         start = time.time()
         vocabularies = {}
         
@@ -233,6 +240,19 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
                                   query_max_lon, 
                                   query_max_lat,
                                   output_format):
+        """
+        Searches for EOVs in the provided ErddapDataset metadata.
+        Checks if the query constraints is valid for the provided ErddapDataset object
+        
+        Arguments:
+        dataset : ErddapDataset object
+        eovs: (list(str)) : list of EOVs requested
+        query_start_date / query_end_date : (str) start/end dates
+        query_min/max_lon/lat : float
+        output_format : (str)
+        
+        Returns a ErddapRequest object.
+        """
         variables_found = []
 
         start = time.time()
@@ -248,6 +268,7 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
             return None
 
         if dataset.covers_spatiotemporal_query(query_start_date, query_end_date, query_min_lon, query_min_lat, query_max_lon, query_max_lat):
+            
             request = ErddapRequest(dataset,
                                     variables_found,
                                     query_min_lon,
@@ -305,8 +326,8 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
             raise ValueError("At least one of input spatial coordinates provided is invalid. Provide float-convertible values.")
         
         # Output format requested
-        if not output_format in self.ERDDAP_OUTPUT_FORMATS:
-            raise ValueError(f"Provided output format \"{output_format}\" does not match any of available EOVs : {', '.join(self.ERDDAP_OUTPUT_FORMATS)}")
+        if not output_format in ERDDAP_OUTPUT_FORMATS:
+            raise ValueError(f"Provided output format \"{output_format}\" does not match any of available EOVs : {', '.join(ERDDAP_OUTPUT_FORMATS)}")
                 
         # EOVs requested
         for eov in eovs:
@@ -316,7 +337,7 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
 #         query_variables = self.query_vocabularies(eov)
 
 
-        queries = []
+        response = BrokerResponse()
 
         with concurrent.futures.ThreadPoolExecutor(20) as executor:
             futures = []
@@ -339,14 +360,12 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
                 if result is not None:
-                    queries.append(result)
+                    response.add_query(result)
 
             logger.debug(f"Handling dataset {dataset} took {time.time() - start} seconds")
         
-        return queries
-                
+        return response
 
-            
             
 class ErddapRequest:
     
@@ -373,10 +392,8 @@ class ErddapRequest:
         else:
             self.query_min_lon = query_min_lon
         if dataset.protocol == "griddap" and query_min_lat < dataset.min_lat:
-            logger.debug(f"{query_min_lat} >= {self.dataset.min_lat} ???? {self.dataset.name}")
             self.query_min_lat = dataset.min_lat
         else:
-            logger.debug(f"{query_min_lat} <= {self.dataset.min_lat} ????!!!! {self.dataset.name}")
             self.query_min_lat = query_min_lat
         if dataset.protocol == "griddap" and query_max_lon > dataset.max_lon:
             self.query_max_lon = dataset.max_lon
@@ -391,13 +408,9 @@ class ErddapRequest:
         self.query_end_date = query_end_date
         self.output_format = output_format
         
-#         try:
         self.query_url = self.build_url(output_format=output_format)
-#         except:
-#             logger.error(self.query_variables)
             
-        self.data = None
-        
+        self.nc_data = None
     
     def build_url(self, output_format=""):
         """
@@ -428,14 +441,79 @@ class ErddapRequest:
             query_string = query_string.rstrip(',')
         return query_string
 
+    def get_nc_data(self):
+        if self.nc_data is None:
+            # Tabledap offers ncCF output format which will provide with better dimensions :
+            if self.dataset.protocol == "tabledap":
+                resp = requests.get(self.build_url(output_format="ncCF"))
+            # Griddap will only offer nc output format :
+            else:
+                resp = requests.get(self.build_url(output_format="nc"))
+                
+            self.nc_data = resp.content
+        return io.BytesIO(self.nc_data)
     
     def to_pandas_dataframe(self):
-#         if self.data is None:
-#             self.data = 
-        return pd.read_csv(self.build_url(output_format="csv"))
+        return self.to_xarray().to_dataframe()
     
     def to_xarray(self):
-        resp = requests.get(self.build_url(output_format="ncCF"))
-        data = io.BytesIO(resp.content)
-        return xr.open_dataset(data)
-                                          
+        return xr.open_dataset(self.get_nc_data())
+    
+    def download(self, output_format, filename=""):
+        if filename == "":
+            filename = str(int(time.mktime()))
+        with open(f"{filename}.{output_format}", 'wb') as out:
+            resp = requests.get(self.build_url(output_format=output_format))
+            out.write(resp.content)
+        return True
+
+
+class BrokerResponse():
+    
+    def __init__(self):
+        self.queries = None
+        
+    def __repr__(self):
+        return f"BrokerResponse object with {len(self.queries)} results."
+        
+    def add_query(self, query):
+        query_line = pd.DataFrame(
+            data={"query_url": [query.query_url]},
+            index=[query.dataset.name]
+        )
+        dataset_global_attributes = query.dataset.metadata[
+            query.dataset.metadata["Variable Name"] == "NC_GLOBAL"][
+            ["Attribute Name", "Value"]
+        ]
+        for index, row in dataset_global_attributes.iterrows():
+            query_line[row["Attribute Name"]] = row["Value"]
+        
+        query_line["query_object"] = query
+        
+        if not isinstance(self.queries, pd.DataFrame):
+            logger.debug(f"Creating DataFrame with dataset {query.dataset.name}")
+            self.queries = query_line
+        else:
+            logger.debug(f"Adding dataset {query.dataset.name} to existing dataframe.")
+            self.queries = self.queries.append(query_line)
+    
+    def query_to_xarray(self, dataset_id):
+        if not dataset_id in self.queries.index:
+            raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
+        else:
+            return self.queries.loc[dataset_id].query_object.to_xarray()
+        
+    def query_to_pandas_dataframe(self, dataset_id):
+        if not dataset_id in self.queries.index:
+            raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
+        else:
+            return self.queries.loc[dataset_id].query_object.to_pandas_dataframe()
+        
+    def query_to_file_download(self, dataset_id, output_format):
+        if output_format not in ERDDAP_OUTPUT_FORMATS:
+            raise Exception(f"Output format {output_format} not in available Erddap output formats :{ERDDAP_OUTPUT_FORMATS}")
+        if not dataset_id in self.queries.index:
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
+        else:
+            return self.queries.loc[dataset_id].query_object.download(output_format)
+        
