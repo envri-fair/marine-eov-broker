@@ -49,41 +49,45 @@ class ErddapDataset:
         if self.metadata[self.metadata["Attribute Name"] == "cdm_data_type"].Value.iloc[0] == "Grid":
             self.protocol = "griddap"
             self.data_url = f"{erddap_server}/griddap/{self.name}"
-            wms_capabilities = f"{erddap_server}/wms/{self.name}/request?service=WMS&request=GetCapabilities&version=1.3.0"
-            data = requests.get(wms_capabilities).content
-            root = ET.fromstring(data)
-            
-            # Erddap wms xml is not parseable with owslib, so we expect the dimensions to be available in the matrix below :
-            for i in root[1][2][2]:
-                if i.tag.endswith("Dimension"):
-                    if i.attrib.get("name", "") == "time":
-                        wms_time_values = [str(time_value)[0:10] for time_value in i.text.split(',')]
-                        self.wms_time_values = np.unique(wms_time_values)
-                        logger.debug(f"Griddap wms for {self.name} returned {len(self.wms_time_values)} time values.")
-                    elif i.attrib.get("name", "") == "elevation":
-                        wms_elevation_values = [float(elevation_value) for elevation_value in i.text.split(',')]
-                        self.wms_elevation_values = [abs(ev) if ev < 0 else ev for ev in wms_elevation_values]
-                        logger.debug(f"Griddap wms for {self.name} returned {len(self.wms_elevation_values)} elevation values.")
-            # Also retrieve the bounding box for the dataset
-            for i in root[1][2][2]:
-                if i.tag == "{http://www.opengis.net/wms}BoundingBox":
-                    self.min_lon = float(i.attrib.get("minx", -180.0))
-                    self.min_lat = float(i.attrib.get("miny", -90.0))
-                    self.max_lon = float(i.attrib.get("maxx", 180.0))
-                    self.max_lat = float(i.attrib.get("maxy", 90.0))
-                    
+            self.process_griddap_attributes()         
         else:
             self.protocol = "tabledap"
             self.data_url = f"{erddap_server}/tabledap/{self.name}"
         
+        # Extract parameters which have the "sdn_parameter_urn" variable attribute :
         self.parameters = {}
-        
         for i, r in self.metadata[
                             (self.metadata["Attribute Name"] == "sdn_parameter_urn")
                         ].iterrows():
             self.parameters[r["Value"]] = r["Variable Name"]
+            
+        # This will be used later if EOVs were found among the available parameters.
+        self.found_eovs = {}
         
+    def process_griddap_attributes(self):
+        wms_capabilities = f"{self.server}/wms/{self.name}/request?service=WMS&request=GetCapabilities&version=1.3.0"
+        data = requests.get(wms_capabilities).content
+        root = ET.fromstring(data)
 
+        # Erddap wms xml is not parseable with owslib, so we expect the dimensions to be available in the matrix below :
+        for i in root[1][2][2]:
+            if i.tag.endswith("Dimension"):
+                if i.attrib.get("name", "") == "time":
+                    wms_time_values = [str(time_value)[0:10] for time_value in i.text.split(',')]
+                    self.wms_time_values = np.unique(wms_time_values)
+                    logger.debug(f"Griddap wms for {self.name} returned {len(self.wms_time_values)} time values.")
+                elif i.attrib.get("name", "") == "elevation":
+                    wms_elevation_values = [float(elevation_value) for elevation_value in i.text.split(',')]
+                    self.wms_elevation_values = [abs(ev) if ev < 0 else ev for ev in wms_elevation_values]
+                    logger.debug(f"Griddap wms for {self.name} returned {len(self.wms_elevation_values)} elevation values.")
+        # Also retrieve the bounding box for the dataset
+        for i in root[1][2][2]:
+            if i.tag == "{http://www.opengis.net/wms}BoundingBox":
+                self.min_lon = float(i.attrib.get("minx", -180.0))
+                self.min_lat = float(i.attrib.get("miny", -90.0))
+                self.max_lon = float(i.attrib.get("maxx", 180.0))
+                self.max_lat = float(i.attrib.get("maxy", 90.0))
+                
     def __repr__(self):
         return f"{self.name} Erddap dataset at {self.server}"
         
