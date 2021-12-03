@@ -16,6 +16,7 @@ INPUT_DATE_FORMATS = ["%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%SZ",
                       "%Y%m%d", "%Y-%m-%d"]
 
 ERDDAP_OUTPUT_FORMATS = ["csv", "geoJson", "json", "nc", "ncCF", "odvTxt"]
+EOV_LIST = ['EV_OXY', 'EV_SEATEMP', 'EV_SALIN', 'EV_CURR', 'EV_CHLA', 'EV_CO2', 'EV_NUTS']
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,6 @@ logger = logging.getLogger(__name__)
 class MarineBroker:
     
     vocabularies_server = "https://vocab.nerc.ac.uk/sparql/"
-    EOV_LIST = ['EV_OXY', 'EV_SEATEMP', 'EV_SALIN', 'EV_CURR', 'EV_CHLA', 'EV_CO2', 'EV_NUTS']
     DEFAULT_ERDDAP_SERVERS = {
         "https://www.ifremer.fr/erddap": ["ArgoFloats", "ArgoFloats-synthetic-BGC", 
                                           "SDC_BAL_CLIM_TS_V2_m", "SDC_BAL_CLIM_TS_V2_s",
@@ -54,7 +54,7 @@ class MarineBroker:
         
         with concurrent.futures.ThreadPoolExecutor(10) as executor:
             futures = []
-            for eov in self.EOV_LIST:
+            for eov in EOV_LIST:
                 futures.append(executor.submit(self.build_vocabularies, eov))
                 
             for future in concurrent.futures.as_completed(futures):
@@ -119,15 +119,9 @@ class MarineBroker:
         start = time.time()
         vocabularies = {}
         
-#         for EOV in self.EOV_LIST:
         eov_result = self.query_vocabularies(eov)
-
-#         self.vocabularies[eov] = eov_result
-        
-#         logger.debug(eov_result)
         logger.debug(f"Gathering vocabularies took {time.time() - start} seconds.")
         return eov, eov_result
-#         self.vocabularies =  vocabularies
         
     
     def query_vocabularies(self, eov) -> dict:
@@ -178,7 +172,7 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
         return response
 
     
-    def find_eov_in_dataset(self, dataset, eov_vocabs):
+    def find_eov_in_dataset(self, dataset, eov, eov_vocabs):
         """
         Looks through the dataset metadata to find a matching variable name.
         The match is made on the "sdn_parameter_urn" variable attribute.
@@ -194,10 +188,19 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
         P01 = [v['P01notation']['value'] for v in eov_vocabs["results"]["bindings"]]
         P02 = [v['P02']['value'] for v in eov_vocabs["results"]["bindings"]]
         
-        found_vars = [dataset.parameters[i] for i in P01 if i in dataset.parameters.keys()]
+#         found_vars = [dataset.parameters[i] for i in P01 if i in dataset.parameters.keys()]
+        found_vars = []
+        for i in P01:
+            if i in dataset.parameters.keys():
+                found_vars.append(dataset.parameters[i])
+                dataset.found_eovs[eov] = dataset.parameters[i]
         
         if len(found_vars) == 0:
-            found_vars = [dataset.parameters[i] for i in P02 if i in dataset.parameters.keys()]
+#             found_vars = [dataset.parameters[i] for i in P02 if i in dataset.parameters.keys()]
+            for i in P02:
+                if i in dataset.parameters.keys():
+                    found_vars.append(dataset.parameters[i])
+                    dataset.found_eovs[eov] = dataset.parameters[i]
             
         if found_vars is not None and len(found_vars) > 0:
 #             logging.debug(f"Found vars for dataset {dataset.name} : {np.unique(found_vars)}")
@@ -257,7 +260,7 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
 
         start = time.time()
         for eov in eovs:
-            variables_found.extend(self.find_eov_in_dataset(dataset, self.vocabularies[eov]))
+            variables_found.extend(self.find_eov_in_dataset(dataset, eov, self.vocabularies[eov]))
         logger.debug(f"Looking for eovs in {dataset.name} took {time.time() - start} seconds with result : {variables_found}")
 
         # Filter out None values
@@ -331,8 +334,8 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
                 
         # EOVs requested
         for eov in eovs:
-            if not eov in self.EOV_LIST:
-                raise ValueError(f"Provided eov \"{eov}\" does not match any of available EOVs : {', '.join(self.EOV_LIST)}")
+            if not eov in EOV_LIST:
+                raise ValueError(f"Provided eov \"{eov}\" does not match any of available EOVs : {', '.join(EOV_LIST)}")
         
 #         query_variables = self.query_vocabularies(eov)
 
@@ -461,7 +464,7 @@ class ErddapRequest:
     
     def download(self, output_format, filename=""):
         if filename == "":
-            filename = str(int(time.mktime()))
+            filename = f'{self.dataset.name}-{str(int(time.time()))}'
         with open(f"{filename}.{output_format}", 'wb') as out:
             resp = requests.get(self.build_url(output_format=output_format))
             out.write(resp.content)
@@ -477,10 +480,21 @@ class BrokerResponse():
         return f"BrokerResponse object with {len(self.queries)} results."
         
     def add_query(self, query):
+        """
+        Add a query to the response. The query is a Pandas DataFrame.
+        It contains :
+        - the query URL
+        - the dataset global metadata
+        - found variables in the dataset matching the EOVS
+        - the ErddapRequest object containing the ErddapDataset object and the data access helpers
+        """
+        
+        # Get the dataset url:
         query_line = pd.DataFrame(
             data={"query_url": [query.query_url]},
             index=[query.dataset.name]
         )
+        # Add dataset global metadata to the dataframe
         dataset_global_attributes = query.dataset.metadata[
             query.dataset.metadata["Variable Name"] == "NC_GLOBAL"][
             ["Attribute Name", "Value"]
@@ -488,7 +502,15 @@ class BrokerResponse():
         for index, row in dataset_global_attributes.iterrows():
             query_line[row["Attribute Name"]] = row["Value"]
         
+        # Add the ErddapRequest object:
         query_line["query_object"] = query
+        
+        # Add the EOVS columns with the variables found if any :
+        for eov in EOV_LIST:
+            if eov in query.dataset.found_eovs.keys():
+                query_line[eov] = query.dataset.found_eovs[eov]
+            else:
+                query_line[eov] = ""
         
         if not isinstance(self.queries, pd.DataFrame):
             logger.debug(f"Creating DataFrame with dataset {query.dataset.name}")
@@ -497,18 +519,39 @@ class BrokerResponse():
             logger.debug(f"Adding dataset {query.dataset.name} to existing dataframe.")
             self.queries = self.queries.append(query_line)
     
-    def query_to_xarray(self, dataset_id):
+    def get_dataset(self, dataset_id):
+        if not dataset_id in self.queries.index:
+            raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
+            
+        return self.queries.loc[dataset_id].query_object.dataset
+    
+    def get_datasets_list(self):
+        return self.queries.index.tolist()
+    
+    def query_to_xarray(self, dataset_id, eov=""):
         if not dataset_id in self.queries.index:
             raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
         else:
-            return self.queries.loc[dataset_id].query_object.to_xarray()
-        
-    def query_to_pandas_dataframe(self, dataset_id):
+            if eov != "":
+                if eov not in EOV_LIST:
+                    raise Exception(f"EOV {eov} not in allowed EOV list : {EOV_LIST}")
+                eov_varname = self.queries.loc[dataset_id].query_object.dataset.found_eovs[eov]
+                return self.queries.loc[dataset_id].query_object.to_xarray()[eov_varname]
+            else:
+                return self.queries.loc[dataset_id].query_object.to_xarray()
+            
+    def query_to_pandas_dataframe(self, dataset_id, eov=""):
         if not dataset_id in self.queries.index:
             raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
         else:
-            return self.queries.loc[dataset_id].query_object.to_pandas_dataframe()
-        
+            if eov != "":
+                if eov not in EOV_LIST:
+                    raise Exception(f"EOV {eov} not in allowed EOV list : {EOV_LIST}")
+                eov_varname = self.queries.loc[dataset_id].query_object.dataset.found_eovs[eov]
+                return self.queries.loc[dataset_id].query_object.to_pandas_dataframe()[eov_varname]
+            else:
+                return self.queries.loc[dataset_id].query_object.to_pandas_dataframe()
+            
     def query_to_file_download(self, dataset_id, output_format):
         if output_format not in ERDDAP_OUTPUT_FORMATS:
             raise Exception(f"Output format {output_format} not in available Erddap output formats :{ERDDAP_OUTPUT_FORMATS}")
@@ -516,4 +559,4 @@ class BrokerResponse():
             raise Exception(f"Dataset id {dataset_id} was not found in queries.")
         else:
             return self.queries.loc[dataset_id].query_object.download(output_format)
-        
+            
