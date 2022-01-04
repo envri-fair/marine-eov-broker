@@ -1,0 +1,40 @@
+name: marine_eov
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - aiohttp
+  - basemap
+  - bokeh
+  - cartopy
+  - cartopy_offlinedata
+  - fsspec
+  - h5netcdf
+  - h5py
+  - hdf4
+  - hdf5
+  - ipykernel
+  - ipython
+  - ipython_genutils
+  - ipywidgets
+  - jupyter_client
+  - jupyter_core
+  - jupyterlab_pygments
+  - jupyterlab_widgets
+  - matplotlib
+  - matplotlib-base
+  - matplotlib-inline
+  - netcdf4
+  - notebook
+  - numpy
+  - pandas
+  - pip
+  - proj
+  - python
+  - requests
+  - scipy
+  - setuptools
+  - shapely
+  - sparqlwrapper
+  - xarray
+  - yaml

@@ -1,2 +1,6 @@
 lib/__pycache__
 lib/.ipynb_checkpoints
+.ipynb_checkpoints
+dist
+sos
+src/*.egg-info
