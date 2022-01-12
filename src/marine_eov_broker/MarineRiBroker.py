@@ -542,7 +542,7 @@ class BrokerResponse():
             
     def query_to_pandas_dataframe(self, dataset_id, eov=""):
         if not dataset_id in self.queries.index:
-            raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
         else:
             if eov != "":
                 if eov not in EOV_LIST:
