@@ -93,8 +93,10 @@ class ErddapDataset:
         
     def get_metadata(self):
         start = time.time()
-        metadata = pd.read_csv(self.metadata_url)
-        
+        try:
+            metadata = pd.read_csv(self.metadata_url)
+        except HTTPError as http_error:
+            logger.warning(f"{self.server} Erddap server answered with HTTP code {http_error.code} and reason {http_error.reason}")
         return metadata
 
     

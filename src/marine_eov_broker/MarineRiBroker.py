@@ -1,7 +1,7 @@
 from . import ErddapMarineRI
 import pandas as pd
 import requests
-from urllib.error import HTTPError
+# from urllib.error import HTTPError
 import io
 import xarray as xr
 import numpy as np
@@ -77,8 +77,8 @@ class MarineBroker:
             for future in concurrent.futures.as_completed(futures):
                 try:
                     self.datasets.append(future.result())
-                except HttpError as http_error:
-                    logger.warning(f"An erddap server returned the following response code {http_error.code}: {http_error.reason}")
+                except:
+                    pass
                     
     
             
