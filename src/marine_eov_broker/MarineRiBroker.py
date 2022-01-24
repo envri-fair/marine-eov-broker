@@ -1,6 +1,7 @@
 from . import ErddapMarineRI
 import pandas as pd
 import requests
+from urllib.error import HTTPError
 import io
 import xarray as xr
 import numpy as np
@@ -74,7 +75,11 @@ class MarineBroker:
                 futures.append(executor.submit(self.get_dataset, erddap_server, dataset_id))
                 
             for future in concurrent.futures.as_completed(futures):
-                self.datasets.append(future.result())
+                try:
+                    self.datasets.append(future.result())
+                except HttpError as http_error:
+                    logger.warning(f"An erddap server returned the following response code {http_error.code}: {http_error.reason}")
+                    
     
             
     def find_datasets_in_erddap_server(self, erddap_server) -> None:
@@ -521,24 +526,39 @@ class BrokerResponse():
     
     def get_dataset(self, dataset_id):
         if not dataset_id in self.queries.index:
-            raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
             
         return self.queries.loc[dataset_id].query_object.dataset
     
     def get_datasets_list(self):
         return self.queries.index.tolist()
     
-    def query_to_xarray(self, dataset_id, eov=""):
+    def query_to_xarray(self, dataset_id, rename_vars=True, eov=""):
+        """
+        Get a query by the datasets ID & retrieve the result of the query in an xarray dataset.
+        The resulting dataset will contain all the variables linked with the EOV(s) queried to the broker.
+        The variables names are renamed by default with the EOV name, one can disable the renaming by switching rename_vars arg to False
+        
+        Args:
+        - dataset_id (str): the dataset_id as specified in BrokerResponse object
+        
+        Optional args:
+        - rename_vars (bool): rename original variables in the dataset by their P01 parameter; if False, keep the original names
+        - eov (str): only retrieve one specific EOV in the xarray dataset.
+        """
         if not dataset_id in self.queries.index:
-            raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
         else:
             if eov != "":
                 if eov not in EOV_LIST:
                     raise Exception(f"EOV {eov} not in allowed EOV list : {EOV_LIST}")
                 eov_varname = self.queries.loc[dataset_id].query_object.dataset.found_eovs[eov]
-                return self.queries.loc[dataset_id].query_object.to_xarray()[eov_varname]
+                ds = self.queries.loc[dataset_id].query_object.to_xarray()[eov_varname]
             else:
-                return self.queries.loc[dataset_id].query_object.to_xarray()
+                ds = self.queries.loc[dataset_id].query_object.to_xarray()
+            # Todo : code rename_vars
+            # if rename_vars:
+            #     varname = 
             
     def query_to_pandas_dataframe(self, dataset_id, eov=""):
         if not dataset_id in self.queries.index:
