@@ -368,8 +368,6 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
                 result = future.result()
                 if result is not None:
                     response.add_query(result)
-
-            logger.debug(f"Handling dataset {dataset} took {time.time() - start} seconds")
         
         return response
 
