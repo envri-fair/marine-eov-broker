@@ -1,6 +1,7 @@
 from . import ErddapMarineRI
 import pandas as pd
 import requests
+# from urllib.error import HTTPError
 import io
 import xarray as xr
 import numpy as np
@@ -9,7 +10,6 @@ import logging
 import concurrent.futures
 import datetime
 from SPARQLWrapper import SPARQLWrapper, JSON
-
 
 INPUT_DATE_FORMATS = ["%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%SZ", 
                       "%Y%m%dT%H:%M:%SZ", "%Y-%m-%dT%H%M%SZ", 
@@ -37,7 +37,7 @@ class MarineBroker:
                                           "SDC_MED_CLIM_TS_V2_s_whole_period",
                                           "SDC_NAT_CLIM_TS_V2_050_m", "SDC_NAT_CLIM_TS_V2_050_s"],
         "http://erddap.emso.eu/erddap": None,
-        "https://erddap.icos-cp.eu/erddap": None
+        "https://erddap.icos-cp.eu/erddap": ["icos11ss20211206"]
     }
 
     def __init__(self, erddap_servers=DEFAULT_ERDDAP_SERVERS):
@@ -74,7 +74,11 @@ class MarineBroker:
                 futures.append(executor.submit(self.get_dataset, erddap_server, dataset_id))
                 
             for future in concurrent.futures.as_completed(futures):
-                self.datasets.append(future.result())
+                try:
+                    self.datasets.append(future.result())
+                except:
+                    pass
+                    
     
             
     def find_datasets_in_erddap_server(self, erddap_server) -> None:
@@ -340,7 +344,7 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
 #         query_variables = self.query_vocabularies(eov)
 
 
-        response = BrokerResponse()
+        response = BrokerResponse(eovs)
 
         with concurrent.futures.ThreadPoolExecutor(20) as executor:
             futures = []
@@ -364,8 +368,6 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
                 result = future.result()
                 if result is not None:
                     response.add_query(result)
-
-            logger.debug(f"Handling dataset {dataset} took {time.time() - start} seconds")
         
         return response
 
@@ -447,12 +449,12 @@ class ErddapRequest:
     def get_nc_data(self):
         if self.nc_data is None:
             # Tabledap offers ncCF output format which will provide with better dimensions :
-            if self.dataset.protocol == "tabledap":
-                resp = requests.get(self.build_url(output_format="ncCF"))
+            # if self.dataset.protocol == "tabledap":
+            #     resp = requests.get(self.build_url(output_format="ncCF"))
             # Griddap will only offer nc output format :
-            else:
-                resp = requests.get(self.build_url(output_format="nc"))
-                
+            # else:
+            #     resp = requests.get(self.build_url(output_format="nc"))
+            resp = requests.get(self.build_url(output_format="nc"))
             self.nc_data = resp.content
         return io.BytesIO(self.nc_data)
     
@@ -473,7 +475,8 @@ class ErddapRequest:
 
 class BrokerResponse():
     
-    def __init__(self):
+    def __init__(self, eovs):
+        self.eovs = eovs
         self.queries = None
         
     def __repr__(self):
@@ -520,29 +523,73 @@ class BrokerResponse():
             self.queries = self.queries.append(query_line)
     
     def get_dataset(self, dataset_id):
+        '''
+        Returns the ErddapRequest object for the provided dataset ID.
+        
+        Args:
+        - dataset_id (str): the dataset_id as specified in BrokerResponse object
+        '''
         if not dataset_id in self.queries.index:
-            raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
             
         return self.queries.loc[dataset_id].query_object.dataset
     
+    def get_dataset_EOVs_list(self, dataset_id):
+        '''
+        Returns a dict of the EOVs found for the request in the specified dataset ID.
+        The dict structure is the following :
+        {
+            <EOV_NAME>: <Variable name>
+        }
+        Args:
+        - dataset_id (str): the dataset_id as specified in BrokerResponse object
+        '''
+        if not dataset_id in self.queries.index:
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
+        
+        eov_dict = {}
+        for eov in self.eovs:
+            eov_dict[eov] = self.queries.loc[dataset_id][eov]
+        
+        return eov_dict
+    
     def get_datasets_list(self):
+        '''
+        Returns a list of dataset IDs found for the specified query.
+        '''
         return self.queries.index.tolist()
     
-    def query_to_xarray(self, dataset_id, eov=""):
+    def query_to_xarray(self, dataset_id, rename_vars=True, eov=""):
+        """
+        Get a query by the datasets ID & retrieve the result of the query in an xarray dataset.
+        The resulting dataset will contain all the variables linked with the EOV(s) queried to the broker.
+        The variables names are renamed by default with the EOV name, one can disable the renaming by switching rename_vars arg to False
+        
+        Args:
+        - dataset_id (str): the dataset_id as specified in BrokerResponse object
+        
+        Optional args:
+        - rename_vars (bool): rename original variables in the dataset by their P01 parameter; if False, keep the original names
+        - eov (str): only retrieve one specific EOV in the xarray dataset.
+        """
         if not dataset_id in self.queries.index:
-            raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
         else:
             if eov != "":
                 if eov not in EOV_LIST:
                     raise Exception(f"EOV {eov} not in allowed EOV list : {EOV_LIST}")
                 eov_varname = self.queries.loc[dataset_id].query_object.dataset.found_eovs[eov]
-                return self.queries.loc[dataset_id].query_object.to_xarray()[eov_varname]
+                ds = self.queries.loc[dataset_id].query_object.to_xarray()[eov_varname]
             else:
-                return self.queries.loc[dataset_id].query_object.to_xarray()
+                ds = self.queries.loc[dataset_id].query_object.to_xarray()
+            # Todo : code rename_vars
+            # if rename_vars:
+            #     varname = 
+        return ds
             
     def query_to_pandas_dataframe(self, dataset_id, eov=""):
         if not dataset_id in self.queries.index:
-            raise Excetion(f"Dataset id {dataset_id} was not found in queries.")
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
         else:
             if eov != "":
                 if eov not in EOV_LIST:
