@@ -11,7 +11,6 @@ import concurrent.futures
 import datetime
 from SPARQLWrapper import SPARQLWrapper, JSON
 
-
 INPUT_DATE_FORMATS = ["%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%SZ", 
                       "%Y%m%dT%H:%M:%SZ", "%Y-%m-%dT%H%M%SZ", 
                       "%Y%m%d", "%Y-%m-%d"]
@@ -452,12 +451,12 @@ class ErddapRequest:
     def get_nc_data(self):
         if self.nc_data is None:
             # Tabledap offers ncCF output format which will provide with better dimensions :
-            if self.dataset.protocol == "tabledap":
-                resp = requests.get(self.build_url(output_format="ncCF"))
+            # if self.dataset.protocol == "tabledap":
+            #     resp = requests.get(self.build_url(output_format="ncCF"))
             # Griddap will only offer nc output format :
-            else:
-                resp = requests.get(self.build_url(output_format="nc"))
-                
+            # else:
+            #     resp = requests.get(self.build_url(output_format="nc"))
+            resp = requests.get(self.build_url(output_format="nc"))
             self.nc_data = resp.content
         return io.BytesIO(self.nc_data)
     
@@ -551,7 +550,7 @@ class BrokerResponse():
             raise Exception(f"Dataset id {dataset_id} was not found in queries.")
         
         eov_dict = {}
-        for eov in in self.eovs:
+        for eov in self.eovs:
             eov_dict[eov] = self.queries.loc[dataset_id][eov]
         
         return eov_dict
@@ -588,6 +587,7 @@ class BrokerResponse():
             # Todo : code rename_vars
             # if rename_vars:
             #     varname = 
+        return ds
             
     def query_to_pandas_dataframe(self, dataset_id, eov=""):
         if not dataset_id in self.queries.index:
