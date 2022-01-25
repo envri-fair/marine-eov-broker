@@ -345,7 +345,7 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
 #         query_variables = self.query_vocabularies(eov)
 
 
-        response = BrokerResponse()
+        response = BrokerResponse(eovs)
 
         with concurrent.futures.ThreadPoolExecutor(20) as executor:
             futures = []
@@ -478,7 +478,8 @@ class ErddapRequest:
 
 class BrokerResponse():
     
-    def __init__(self):
+    def __init__(self, eovs):
+        self.eovs = eovs
         self.queries = None
         
     def __repr__(self):
@@ -525,12 +526,40 @@ class BrokerResponse():
             self.queries = self.queries.append(query_line)
     
     def get_dataset(self, dataset_id):
+        '''
+        Returns the ErddapRequest object for the provided dataset ID.
+        
+        Args:
+        - dataset_id (str): the dataset_id as specified in BrokerResponse object
+        '''
         if not dataset_id in self.queries.index:
             raise Exception(f"Dataset id {dataset_id} was not found in queries.")
             
         return self.queries.loc[dataset_id].query_object.dataset
     
+    def get_dataset_EOVs_list(self, dataset_id):
+        '''
+        Returns a dict of the EOVs found for the request in the specified dataset ID.
+        The dict structure is the following :
+        {
+            <EOV_NAME>: <Variable name>
+        }
+        Args:
+        - dataset_id (str): the dataset_id as specified in BrokerResponse object
+        '''
+        if not dataset_id in self.queries.index:
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
+        
+        eov_dict = {}
+        for eov in in self.eovs:
+            eov_dict[eov] = self.queries.loc[dataset_id][eov]
+        
+        return eov_dict
+    
     def get_datasets_list(self):
+        '''
+        Returns a list of dataset IDs found for the specified query.
+        '''
         return self.queries.index.tolist()
     
     def query_to_xarray(self, dataset_id, rename_vars=True, eov=""):
