@@ -520,7 +520,7 @@ class BrokerResponse():
             self.queries = query_line
         else:
             logger.debug(f"Adding dataset {query.dataset.name} to existing dataframe.")
-            self.queries = pd.concat([self.queries, query_line])
+            self.queries = self.queries.append(query_line)
     
     def get_dataset(self, dataset_id):
         '''
@@ -559,9 +559,9 @@ class BrokerResponse():
         '''
         return self.queries.index.tolist()
     
-    def query_to_xarray(self, dataset_id, rename_vars=True, eov=""):
+    def dataset_to_xarray(self, dataset_id, rename_vars=True, eov=""):
         """
-        Get a query by the datasets ID & retrieve the result of the query in an xarray dataset.
+        Get a dataset by its ID & retrieve the result of the query in an xarray dataset.
         The resulting dataset will contain all the variables linked with the EOV(s) queried to the broker.
         The variables names are renamed by default with the EOV name, one can disable the renaming by switching rename_vars arg to False
         
@@ -587,7 +587,7 @@ class BrokerResponse():
             #     varname = 
         return ds
             
-    def query_to_pandas_dataframe(self, dataset_id, eov=""):
+    def dataset_to_pandas_dataframe(self, dataset_id, eov=""):
         if not dataset_id in self.queries.index:
             raise Exception(f"Dataset id {dataset_id} was not found in queries.")
         else:
@@ -599,7 +599,7 @@ class BrokerResponse():
             else:
                 return self.queries.loc[dataset_id].query_object.to_pandas_dataframe()
             
-    def query_to_file_download(self, dataset_id, output_format):
+    def dataset_to_file_download(self, dataset_id, output_format):
         if output_format not in ERDDAP_OUTPUT_FORMATS:
             raise Exception(f"Output format {output_format} not in available Erddap output formats :{ERDDAP_OUTPUT_FORMATS}")
         if not dataset_id in self.queries.index:
