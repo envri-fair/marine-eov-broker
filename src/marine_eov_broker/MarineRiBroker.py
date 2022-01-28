@@ -520,7 +520,7 @@ class BrokerResponse():
             self.queries = query_line
         else:
             logger.debug(f"Adding dataset {query.dataset.name} to existing dataframe.")
-            self.queries = self.queries.append(query_line)
+            self.queries = pd.concat([self.queries, query_line])
     
     def get_dataset(self, dataset_id):
         '''
