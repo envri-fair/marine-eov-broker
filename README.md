@@ -1,7 +1,20 @@
+- [marine-eov-broker](#marine-eov-broker)
+  * [Setup](#setup)
+  * [Usage](#usage)
+    + [With the demonstration notebook](#with-the-demonstration-notebook)
+    + [From scratch](#from-scratch)
+      - [Starting the Broker](#starting-the-broker)
+      - [Querying datasets](#querying-datasets)
+      - [Exploring the results](#exploring-the-results)
+      - [Requesting data](#requesting-data)
+  * [Software evolutions](#software-evolutions)
+
+  
+  
 # marine-eov-broker
 Essential Ocean Variables broker linking queries on EOVs to Marine RI data servers taking into account RI-specific vocabularies.
 
-# Setup
+## Setup
 To quickly setup the base environment, you can use conda to create an isolated python/jupyterlab environment by using the marine_eov.yml file.
 Assuming conda is already installed on your setup :
 `conda env create -n <env_name> --file marine_eov.yml`
@@ -9,13 +22,15 @@ Assuming conda is already installed on your setup :
 Once the environment created, activate it & use the following command to install the marine-eov-broker package :
 `pip install git+https://github.com/twnone/marine-eov-broker.git`
 
-# Quickstart
+## Usage
 
-## With the demonstration notebook
+### With the demonstration notebook
 The jupyter notebook at the root of the project can help you to quickly start using the marine-eov-broker module.
 Make sure that the jupyter notebook is indeed using the conda environment in which you installed the package.
 
-## From scratch
+### From scratch
+
+#### Starting the Broker
 Import the module :
 `from marine_eov_broker import MarineRiBroker`
 
@@ -37,9 +52,25 @@ broker = MarineRiBroker.MarineBroker(
     }
 )
 ```
+  
+The default erddap servers configured are the following (as of 2022-01-28):  
+```
+{
+    "https://www.ifremer.fr/erddap": ["ArgoFloats", "ArgoFloats-synthetic-BGC", 
+                                      "SDC_BAL_CLIM_TS_V2_m", "SDC_BAL_CLIM_TS_V2_s",
+                                      "SDC_GLO_AGG_V2", 
+                                      "SDC_GLO_CLIM_TS_V2_1", "SDC_GLO_CLIM_TS_V2_2",
+                                      "SDC_BLS_CLIM_TS_V2_m", "SDC_BLS_CLIM_TS_V2_s"
+                                      ],
+    "http://erddap.emso.eu/erddap": None,
+    "https://erddap.icos-cp.eu/erddap": ["icos11ss20211206"]
+}
+```  
+  
 Specifying **None** instead of the datasets list will make the broker query all the datasets ; make sure it is a reasonable choice considering the number of datasets available in an erddap server.
-
-
+  
+#### Querying datasets
+  
 Once the broker is started, you can submit a query with the following :
 ```
 start_date = "2002-10-01"
@@ -59,17 +90,31 @@ response = broker.submit_request(["EV_SALIN", "EV_OXY", "EV_SEATEMP", "EV_CO2", 
                                  "nc"
                                  )
 ```
-
+  
+#### Exploring the results
+  
 The broker gathers the results in a pandas DataFrame containing for each found dataset :
 - the dataset_id as the index value
 - the dataset metadata found in erddap
-- the EOVs found in the dataset and the related effective variables name
-- an ErddapRequest object that provides the user with convenience method to get the data with xarray/pandas or file download.
+- EOV/Variables name correspondance found
+- a query string that reflects the user query constraints
+  
+#### Requesting data
+  
+Data access is made on dataset basis.  
+Main data access methods are the following :
+- `get_datasets_list()`: simply retrieves the dataset IDs list ; may be useful in order to loop over each dataset & get data regardless of the metadata
+- `get_dataset_EOVs_list(dataset_id)`: gets a dictionnary with EOV/Variable name correspondance for the dataset_id provided
+- `dataset_to_xarray(dataset_id)`: retrieves the data returned by the query stored in the response in an xarray dataset
+- `dataset_to_pandas_dataframe(dataset_id)`: retrieves the data returned by the query stored in the response in a Pandas DataFrame
+- `dataset_to_file_download(dataset_id, output_format)`: retrieves the data returned by the query stored and saves it in the output format with the following file naming **dataset_id-timestamp.output_format**
 
-The notebook provides more complete examples about the convenience methods.
+## Software evolutions
 
-# Software evolutions
+Feel free to register issues and submit pull requests.
 
-Feel free to register issues and pull requests.
+To submit pull request, please first make sure that your code to merge is in a dedicated branch to avoid conflicts.  
+  
+  
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
-To submit pull request, please first make sure that your code to merge is in a dedicated branch to avoid conflicts
