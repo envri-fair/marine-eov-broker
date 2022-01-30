@@ -64,6 +64,13 @@ class ErddapDataset:
         # This will be used later if EOVs were found among the available parameters.
         self.found_eovs = {}
         
+        # Look for depth levels on P01 codes basis :
+        self.depth_variables = []
+        if "SDN:P01::ADEPZZ01" in self.parameters.keys():
+            self.depth_variables.append(self.parameters["SDN:P01::ADEPZZ01"])
+        if "SDN:P01::PRESPR01" in self.parameters.keys():
+            self.depth_variables.append(self.parameters["SDN:P01::PRESPR01"])
+        
     def process_griddap_attributes(self):
         wms_capabilities = f"{self.server}/wms/{self.name}/request?service=WMS&request=GetCapabilities&version=1.3.0"
         data = requests.get(wms_capabilities).content
