@@ -393,6 +393,9 @@ class ErddapRequest:
         self.dataset = dataset
         self.query_variables = query_variables
         
+        if len(self.dataset.depth_variables) > 0:
+            self.query_variables.extend(self.dataset.depth_variables)
+        
         # If the protocol is griddap, we must adjust the query to fit the dataset bbox
         # otherwise, Erddap will return an error.
         # If the query is ok or the protocol is tabldap, we leave the min/max lon/lat values requested.
