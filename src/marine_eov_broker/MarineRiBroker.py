@@ -190,21 +190,25 @@ select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notatio
 
         found_eov = ""
         P01 = [v['P01notation']['value'] for v in eov_vocabs["results"]["bindings"]]
-        P02 = [v['P02']['value'] for v in eov_vocabs["results"]["bindings"]]
+        # Disabling the P02 matching right now because all RIs work on P01 matching in their Erddap setups
+        #P02 = [v['P02']['value'] for v in eov_vocabs["results"]["bindings"]]
         
 #         found_vars = [dataset.parameters[i] for i in P01 if i in dataset.parameters.keys()]
         found_vars = []
         for i in P01:
             if i in dataset.parameters.keys():
                 found_vars.append(dataset.parameters[i])
-                dataset.found_eovs[eov] = dataset.parameters[i]
+                if eov in dataset.found_eovs.keys(): 
+                    dataset.found_eovs[eov].append(dataset.parameters[i])
+                else:
+                    dataset.found_eovs[eov] = [dataset.parameters[i]]
         
-        if len(found_vars) == 0:
+        #if len(found_vars) == 0:
 #             found_vars = [dataset.parameters[i] for i in P02 if i in dataset.parameters.keys()]
-            for i in P02:
-                if i in dataset.parameters.keys():
-                    found_vars.append(dataset.parameters[i])
-                    dataset.found_eovs[eov] = dataset.parameters[i]
+        #    for i in P02:
+        #        if i in dataset.parameters.keys():
+        #            found_vars.append(dataset.parameters[i])
+        #            dataset.found_eovs[eov] = dataset.parameters[i]
             
         if found_vars is not None and len(found_vars) > 0:
 #             logging.debug(f"Found vars for dataset {dataset.name} : {np.unique(found_vars)}")
@@ -511,7 +515,8 @@ class BrokerResponse():
         # Add the EOVS columns with the variables found if any :
         for eov in EOV_LIST:
             if eov in query.dataset.found_eovs.keys():
-                query_line[eov] = query.dataset.found_eovs[eov]
+                logger.debug(f"Will add variables found {query.dataset.found_eovs[eov]} in response for dataset {query.dataset.name}")
+                query_line[eov] = ", ".join(query.dataset.found_eovs[eov])
             else:
                 query_line[eov] = ""
         
@@ -533,6 +538,17 @@ class BrokerResponse():
             raise Exception(f"Dataset id {dataset_id} was not found in queries.")
             
         return self.queries.loc[dataset_id].query_object.dataset
+    
+    def get_dataset_query_url(self, dataset_id):
+        '''
+        Returns the query URL as a string for the specified dataset.
+        
+        - dataset_id (str): the dataset_id as specified in BrokerResponse object
+        '''
+        if not dataset_id in self.queries.index:
+            raise Exception(f"Dataset id {dataset_id} was not found in queries.")
+            
+        return self.queries.loc[dataset_id].query_url
     
     def get_dataset_EOVs_list(self, dataset_id):
         '''
