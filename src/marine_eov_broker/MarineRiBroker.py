@@ -160,25 +160,43 @@ class MarineBroker:
 
         found_eov = ""
         P01 = [v['P01notation']['value'] for v in eov_vocabs["results"]["bindings"]]
-        # Disabling the P02 matching right now because all RIs work on P01 matching in their Erddap setups
-        #P02 = [v['P02']['value'] for v in eov_vocabs["results"]["bindings"]]
+        P02 = [v['P02']['value'] for v in eov_vocabs["results"]["bindings"]]
         
 #         found_vars = [dataset.parameters[i] for i in P01 if i in dataset.parameters.keys()]
         found_vars = []
         for i in P01:
             if i in dataset.parameters.keys():
-                found_vars.append(dataset.parameters[i])
-                if eov in dataset.found_eovs.keys(): 
-                    dataset.found_eovs[eov].append(dataset.parameters[i])
+                eov_param_name_in_dataset = dataset.parameters[i]
+                found_vars.append(eov_param_name_in_dataset)
+                if eov in dataset.found_eovs.keys():
+                    if eov_param_name_in_dataset not in dataset.found_eovs[eov]: 
+                        dataset.found_eovs[eov].append(eov_param_name_in_dataset)
+                    else:
+                        continue
                 else:
-                    dataset.found_eovs[eov] = [dataset.parameters[i]]
+                    dataset.found_eovs[eov] = [eov_param_name_in_dataset]
         
-        #if len(found_vars) == 0:
-#             found_vars = [dataset.parameters[i] for i in P02 if i in dataset.parameters.keys()]
-        #    for i in P02:
-        #        if i in dataset.parameters.keys():
-        #            found_vars.append(dataset.parameters[i])
-        #            dataset.found_eovs[eov] = dataset.parameters[i]
+        if len(found_vars) == 0:
+            found_vars = [dataset.parameters[i] for i in P02 if i in dataset.parameters.keys()]
+            for i in P02:
+                # if dataset.name == "SDC_GLO_AGG_V2":
+                #     logging.debug(f"{dataset.name} :: P02 param : {i}")
+                if i in dataset.parameters.keys():
+                    eov_param_name_in_dataset = dataset.parameters[i]
+                    found_vars.append(eov_param_name_in_dataset)
+                    if eov in dataset.found_eovs.keys():
+                        if eov_param_name_in_dataset not in dataset.found_eovs[eov]: 
+                            dataset.found_eovs[eov].append(eov_param_name_in_dataset)
+                        else:
+                            continue
+                    else:
+                        dataset.found_eovs[eov] = [eov_param_name_in_dataset]
+                # if i in dataset.parameters.keys():
+                #     found_vars.append(dataset.parameters[i])
+                #     if eov in dataset.found_eovs.keys():
+                #         dataset.found_eovs[eov].append(dataset.parameters[i])
+                #     else:
+                #         dataset.found_eovs[eov] = [dataset.parameters[i]]
             
         if found_vars is not None and len(found_vars) > 0:
 #             logging.debug(f"Found vars for dataset {dataset.name} : {np.unique(found_vars)}")
