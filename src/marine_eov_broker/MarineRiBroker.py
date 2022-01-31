@@ -1,4 +1,5 @@
 from . import ErddapMarineRI
+from .NVSQueries import query_strings
 import pandas as pd
 import requests
 # from urllib.error import HTTPError
@@ -16,7 +17,8 @@ INPUT_DATE_FORMATS = ["%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%SZ",
                       "%Y%m%d", "%Y-%m-%d"]
 
 ERDDAP_OUTPUT_FORMATS = ["csv", "geoJson", "json", "nc", "ncCF", "odvTxt"]
-EOV_LIST = ['EV_OXY', 'EV_SEATEMP', 'EV_SALIN', 'EV_CURR', 'EV_CHLA', 'EV_CO2', 'EV_NUTS']
+# EOV_LIST = ['EV_OXY', 'EV_SEATEMP', 'EV_SALIN', 'EV_CURR', 'EV_CHLA', 'EV_CO2', 'EV_NUTS']
+EOV_LIST = ['EV_OXY', 'EV_SEATEMP', 'EV_SALIN']
 
 logger = logging.getLogger(__name__)
 
@@ -138,39 +140,7 @@ class MarineBroker:
         sparql = SPARQLWrapper(self.vocabularies_server)
 
         logging.info(f"Querying vocabulary server for EOV : {eov}")
-        sparql.setQuery("""
-PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-PREFIX pav: <http://purl.org/pav/>
-PREFIX owl: <http://www.w3.org/2002/07/owl#>
-
-select distinct  ?dt ?P01notation ?prefLabel (?R03notation as ?R03) (?P09notation as ?P09) (?P02notation as ?P02)where {<http://vocab.nerc.ac.uk/collection/A05/current/""" + eov + """/> 
-#<https://w3id.org/env/puv#statistic> ?v ; 
-    
-<https://w3id.org/env/puv#matrix> ?v1  ;
-  <https://w3id.org/env/puv#property> ?v2  .
-    
-
-<http://vocab.nerc.ac.uk/collection/P01/current/>  skos:member ?dt  .
-  ?dt owl:deprecated ?depr . FILTER((str(?depr)="false"))
- 
-  #?dt ?rel ?v .  filter(!regex(str(?v),'S07') && regex(str(?rel),'related') ).
-  NOT EXISTS {
-  ?dt ?rel  ?v .  filter(regex(str(?v),'S07/current/'))
-   }
-  
-     ?dt ?rel1 ?v1 .
-       ?dt ?rel2 ?v2 .
-  optional {    ?dt ?rel3 ?v3 . filter(regex(str(?v3),'R03/current/')) .  ?v3 skos:notation ?R03notation .}
-   optional {    ?dt ?rel4 ?v4 . filter(regex(str(?v4),'P09/current/')) .  ?v4 skos:notation ?P09notation .}
-     optional {    ?dt ?rel5 ?v5 . filter(regex(str(?v5),'P02/current/')) .  ?v5 skos:notation ?P02notation .}
-
-?dt skos:prefLabel ?prefLabel .FILTER(langMatches(lang(?prefLabel), "en"))
-    ?dt skos:notation ?P01notation .
-  
-  
-} 
-    """
-    )
+        sparql.setQuery(query_strings[eov])
         sparql.setReturnFormat(JSON)
         response = sparql.query().convert()
         return response
