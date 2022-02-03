@@ -4,10 +4,7 @@ channels:
   - defaults
 dependencies:
   - aiohttp
-  - basemap
   - bokeh
-  - cartopy
-  - cartopy_offlinedata
   - fsspec
   - h5netcdf
   - h5py
@@ -16,19 +13,11 @@ dependencies:
   - ipykernel
   - ipython
   - ipython_genutils
-  - ipywidgets
-  - jupyter_client
-  - jupyter_core
-  - jupyterlab_pygments
-  - jupyterlab_widgets
-  - matplotlib
-  - matplotlib-base
-  - matplotlib-inline
   - netcdf4
-  - notebook
   - numpy
   - pandas
-  - pip
+  - pip:
+    - git+https://github.com/twnone/marine-eov-broker.git@main
   - proj
   - python
   - requests
