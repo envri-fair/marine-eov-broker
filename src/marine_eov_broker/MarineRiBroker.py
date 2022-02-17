@@ -39,7 +39,7 @@ class MarineBroker:
                                           "SDC_MED_CLIM_TS_V2_s_whole_period",
                                           "SDC_NAT_CLIM_TS_V2_050_m", "SDC_NAT_CLIM_TS_V2_050_s"],
         "http://erddap.emso.eu/erddap": None,
-        "https://erddap.icos-cp.eu/erddap": ["icos11ss20211206"]
+        "https://erddap.icos-cp.eu/erddap": None
     }
 
     def __init__(self, erddap_servers=DEFAULT_ERDDAP_SERVERS):
