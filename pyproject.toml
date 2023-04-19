@@ -1,15 +1,27 @@
 [build-system]
 requires = [
     "setuptools>=42",
-    "wheel"
+    "wheel",
+    "SpecifierSet>=3.6"
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
+name = "marine-eov-broker"
+version = "0.9"
+description = "Essential Ocean Variables broker linking queries on EOVs to Marine RI data servers taking into account RI-specific vocabularies."
+readme = "README.md"
 dependencies = [
   'pandas >= 1.3.4',
   'requests >= 2.26.0',
   'shapely >= 1.8.0',
   'sparqlwrapper >= 1.8.5',
-  'xarray >= 0.20.1',
+  'xarray >= 0.20.1'
 ]
+authors = [
+    {name = "Antoine QUERIC"},
+    {name = "Guillaume ALVISET"}
+]
+
+[project.urls]
+'Bug Tracker' = "https://github.com/twnone/marine-eov-broker/issues"

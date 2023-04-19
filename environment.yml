@@ -17,8 +17,6 @@ dependencies:
   - netcdf4
   - numpy
   - pandas
-  - pip:
-    - git+https://github.com/twnone/marine-eov-broker.git@main
   - proj
   - python
   - requests
@@ -28,3 +26,5 @@ dependencies:
   - sparqlwrapper
   - xarray
   - yaml
+  - notebook
+
