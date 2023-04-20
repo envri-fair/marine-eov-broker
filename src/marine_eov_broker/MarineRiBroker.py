@@ -391,6 +391,7 @@ class MarineBroker:
                 result = future.result()
                 if result is not None:
                     response.add_query(result)
+
         return response
 
     def submit_argo_sparql_query(self,
@@ -446,6 +447,55 @@ class MarineBroker:
                     else:
                         response.add_query(result)
         return response
+
+    def submit_sparql_query(self,
+                             query,
+                             endpoint,
+                             eovs,
+                             query_start_date,
+                             query_end_date,
+                             query_min_lon,
+                             query_min_lat,
+                             query_max_lon,
+                             query_max_lat,
+                             output_format,
+                             linked_var,
+                             linked_dataset,) -> list:
+        wrapper = SPARQLWrapper(endpoint)
+        wrapper.setReturnFormat(JSON)
+        wrapper.setQuery(query)
+        results = wrapper.queryAndConvert()
+        response = BrokerResponse(eovs)
+        content_var = []
+        for r in results["results"]["bindings"]:
+            content_var.append(r[linked_var]["value"])
+        with concurrent.futures.ThreadPoolExecutor(20) as executor:
+            futures = []
+            for linked_atom in content_var:
+                futures.append(
+                    executor.submit(self.setup_request_for_dataset,
+                                    self.datasets[0],
+                                    eovs,
+                                    query_start_date,
+                                    query_end_date,
+                                    query_min_lon,
+                                    query_min_lat,
+                                    query_max_lon,
+                                    query_max_lat,
+                                    output_format,
+                                    {linked_var: linked_atom}
+                                    )
+                )
+
+            start = time.time()
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if result is not None:
+                    if response.queries is not None and result.dataset in response.get_datasets_list():
+                        response.queries.loc[linked_dataset].query_object.concat(result.dataset)
+                    else:
+                        response.add_query(result)
+        return response
             
 class ErddapRequest:
     def __init__(self, 
@@ -458,13 +508,13 @@ class ErddapRequest:
                  query_start_date, 
                  query_end_date,
                  output_format,
-                 query_specific_variables=None,
+                 query_specific_variable=None,
                 ):
         
         self.dataset = dataset
         self.query_variables = query_variables
-        # Variables that will be used to link SPARQL and ERDAPP variables for specific datasets (e.g. Argo)
-        self.query_specific_variables = query_specific_variables
+        # Variable that will be used to link SPARQL and ERDAPP variables for specific datasets (e.g. Argo)
+        self.query_specific_variable = query_specific_variable
         
         if len(self.dataset.depth_variables) > 0:
             self.query_variables.extend(self.dataset.depth_variables)
@@ -509,18 +559,18 @@ class ErddapRequest:
         query_string = ""
         
         if self.dataset.protocol == "tabledap":
-            if self.query_specific_variables is None:
+            if self.query_specific_variable is None:
                 query_string = (f"{self.dataset.data_url}.{output_format}"
                                 f"?time%2Clatitude%2Clongitude%2Cplatform_number%2C{'%2C'.join(self.query_variables)}"
                                 f"&time%3E={self.query_start_date}&time%3C={self.query_end_date}"
                                 f"&latitude%3E={self.query_min_lat}&latitude%3C={self.query_max_lat}&longitude%3E={self.query_min_lon}&longitude%3C={self.query_max_lon}")
             else:
-                if "Argo" in self.query_specific_variables.keys():
-                    query_string = (f"{self.dataset.data_url}.{output_format}"
-                                    f"?time%2Clatitude%2Clongitude%2C{'%2C'.join(self.query_variables)}"
-                                    f"&time%3E={self.query_start_date}&time%3C={self.query_end_date}"
-                                    f"&latitude%3E={self.query_min_lat}&latitude%3C={self.query_max_lat}&longitude%3E={self.query_min_lon}&longitude%3C={self.query_max_lon}"
-                                    f"&platform_number=\"{self.query_specific_variables['Argo']}\"")
+                s_var_dataset, s_var_value = next(iter(self.query_specific_variable.items()))
+                query_string = (f"{self.dataset.data_url}.{output_format}"
+                                f"?time%2Clatitude%2Clongitude%2C{'%2C'.join(self.query_variables)}"
+                                f"&time%3E={self.query_start_date}&time%3C={self.query_end_date}"
+                                f"&latitude%3E={self.query_min_lat}&latitude%3C={self.query_max_lat}&longitude%3E={self.query_min_lon}&longitude%3C={self.query_max_lon}"
+                                f"&{s_var_dataset}=\"{s_var_value}\"")
 
         else:
             query_string = f"{self.dataset.data_url}.{output_format}?"
@@ -581,7 +631,7 @@ class SPARQLRequest:
 
 class BrokerResponse():
     
-    def __init__(self, eovs=None):
+    def     __init__(self, eovs=None):
         self.eovs = eovs
         self.queries = None
         self.sparql_results = None
