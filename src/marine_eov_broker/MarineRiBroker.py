@@ -1,3 +1,5 @@
+import sys
+
 from . import ErddapMarineRI
 from .NVSQueries import query_strings
 import pandas as pd
@@ -11,6 +13,7 @@ import logging
 import concurrent.futures
 import datetime
 from SPARQLWrapper import SPARQLWrapper, JSON
+import traceback
 
 INPUT_DATE_FORMATS = ["%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%SZ", 
                       "%Y%m%dT%H:%M:%SZ", "%Y-%m-%dT%H%M%SZ", 
@@ -41,8 +44,11 @@ class MarineBroker:
         "http://erddap.emso.eu/erddap": None,
         "https://erddap.icos-cp.eu/erddap": None
     }
+    DEFAULT_SPARQL_ENDPOINTS = {
+        "Argo": "https://sparql.ifremer.fr/argo/query"
+    }
 
-    def __init__(self, erddap_servers=DEFAULT_ERDDAP_SERVERS):
+    def __init__(self, erddap_servers=DEFAULT_ERDDAP_SERVERS, sparql_endpoints=DEFAULT_SPARQL_ENDPOINTS):
         """Create a new broker and automatically scan Erddap servers provided.
         
         Keyword arguments:
@@ -238,7 +244,8 @@ class MarineBroker:
                                   query_min_lat, 
                                   query_max_lon, 
                                   query_max_lat,
-                                  output_format):
+                                  output_format,
+                                  query_specific_variables=None):
         """
         Searches for EOVs in the provided ErddapDataset metadata.
         Checks if the query constraints is valid for the provided ErddapDataset object
@@ -276,12 +283,53 @@ class MarineBroker:
                                     query_max_lat,
                                     query_start_date,
                                     query_end_date,
-                                    output_format
+                                    output_format,
+                                    query_specific_variables
                                    )
             return request
         else:
             return None
-    
+
+    def check_variables(self,
+                        eovs,
+                        query_start_date,
+                        query_end_date,
+                        query_min_lon,
+                        query_min_lat,
+                        query_max_lon,
+                        query_max_lat,
+                        output_format,
+                        query_specific_variables=None):
+        if isinstance(eovs, str):
+            eovs = [eovs]
+
+        # Check inputs :
+        # temporal :
+        self.validate_datetime(query_start_date)
+        self.validate_datetime(query_end_date)
+
+        # Spatial inputs
+        try:
+            query_min_lon = float(query_min_lon)
+            query_min_lat = float(query_min_lat)
+            query_max_lon = float(query_max_lon)
+            query_max_lat = float(query_max_lat)
+        except ValueError:
+            raise ValueError(
+                "At least one of input spatial coordinates provided is invalid. Provide float-convertible values.")
+
+        # Output format requested
+        if not output_format in ERDDAP_OUTPUT_FORMATS:
+            raise ValueError(
+                f"Provided output format \"{output_format}\" does not match any of available EOVs : {', '.join(ERDDAP_OUTPUT_FORMATS)}")
+
+        # EOVs requested
+        for eov in eovs:
+            if not eov in EOV_LIST:
+                raise ValueError(f"Provided eov \"{eov}\" does not match any of available EOVs : {', '.join(EOV_LIST)}")
+
+    #         query_variables = self.query_vocabularies(eov)
+
     def submit_request(self,
                        eovs,
                        query_start_date,
@@ -306,35 +354,18 @@ class MarineBroker:
         output_format: output format string
         """
         request_datasets = []
-        
+
         if isinstance(eovs, str):
             eovs = [eovs]
-        
-        # Check inputs :
-        # temporal :
-        self.validate_datetime(query_start_date)
-        self.validate_datetime(query_end_date)
-        
-        # Spatial inputs
-        try:
-            query_min_lon = float(query_min_lon)
-            query_min_lat = float(query_min_lat)
-            query_max_lon = float(query_max_lon)
-            query_max_lat = float(query_max_lat)
-        except ValueError:
-            raise ValueError("At least one of input spatial coordinates provided is invalid. Provide float-convertible values.")
-        
-        # Output format requested
-        if not output_format in ERDDAP_OUTPUT_FORMATS:
-            raise ValueError(f"Provided output format \"{output_format}\" does not match any of available EOVs : {', '.join(ERDDAP_OUTPUT_FORMATS)}")
-                
-        # EOVs requested
-        for eov in eovs:
-            if not eov in EOV_LIST:
-                raise ValueError(f"Provided eov \"{eov}\" does not match any of available EOVs : {', '.join(EOV_LIST)}")
-        
-#         query_variables = self.query_vocabularies(eov)
 
+        self.check_variables(eovs,
+                       query_start_date,
+                       query_end_date,
+                       query_min_lon,
+                       query_min_lat,
+                       query_max_lon,
+                       query_max_lat,
+                       output_format)
 
         response = BrokerResponse(eovs)
 
@@ -347,25 +378,72 @@ class MarineBroker:
                                     eovs,
                                     query_start_date,
                                     query_end_date,
-                                    query_min_lon, 
-                                    query_min_lat, 
-                                    query_max_lon, 
+                                    query_min_lon,
+                                    query_min_lat,
+                                    query_max_lon,
                                     query_max_lat,
                                     output_format
-                                   )
+                                    )
                 )
-                
+
             start = time.time()
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
                 if result is not None:
                     response.add_query(result)
-        
+
         return response
 
+    def submit_sparql_query(self,
+                             query,
+                             endpoint,
+                             eovs,
+                             query_start_date,
+                             query_end_date,
+                             query_min_lon,
+                             query_min_lat,
+                             query_max_lon,
+                             query_max_lat,
+                             output_format,
+                             linked_var,
+                             linked_dataset,) -> list:
+        wrapper = SPARQLWrapper(endpoint)
+        wrapper.setReturnFormat(JSON)
+        wrapper.setQuery(query)
+        results = wrapper.queryAndConvert()
+        response = BrokerResponse(eovs)
+        content_var = []
+        for r in results["results"]["bindings"]:
+            content_var.append(r[linked_var]["value"])
+        with concurrent.futures.ThreadPoolExecutor(20) as executor:
+            futures = []
+            for linked_atom in content_var:
+                futures.append(
+                    executor.submit(self.setup_request_for_dataset,
+                                    self.datasets[0],
+                                    eovs,
+                                    query_start_date,
+                                    query_end_date,
+                                    query_min_lon,
+                                    query_min_lat,
+                                    query_max_lon,
+                                    query_max_lat,
+                                    output_format,
+                                    {linked_var: linked_atom}
+                                    )
+                )
+
+            start = time.time()
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if result is not None:
+                    if response.queries is not None and result.dataset in response.get_datasets_list():
+                        response.queries.loc[linked_dataset].query_object.concat(result.dataset)
+                    else:
+                        response.add_query(result)
+        return response
             
 class ErddapRequest:
-    
     def __init__(self, 
                  dataset, 
                  query_variables, 
@@ -375,11 +453,14 @@ class ErddapRequest:
                  query_max_lat, 
                  query_start_date, 
                  query_end_date,
-                 output_format
+                 output_format,
+                 query_specific_variable=None,
                 ):
         
         self.dataset = dataset
         self.query_variables = query_variables
+        # Variable that will be used to link SPARQL and ERDAPP variables for specific datasets (e.g. Argo)
+        self.query_specific_variable = query_specific_variable
         
         if len(self.dataset.depth_variables) > 0:
             self.query_variables.extend(self.dataset.depth_variables)
@@ -424,12 +505,20 @@ class ErddapRequest:
         query_string = ""
         
         if self.dataset.protocol == "tabledap":
-            query_string = (f"{self.dataset.data_url}.{output_format}"
-                            f"?time%2Clatitude%2Clongitude%2C{'%2C'.join(self.query_variables)}"
-                            f"&time%3E={self.query_start_date}&time%3C={self.query_end_date}"
-                            f"&latitude%3E={self.query_min_lat}&latitude%3C={self.query_max_lat}&longitude%3E={self.query_min_lon}&longitude%3C={self.query_max_lon}")
+            if self.query_specific_variable is None:
+                query_string = (f"{self.dataset.data_url}.{output_format}"
+                                f"?time%2Clatitude%2Clongitude%2Cplatform_number%2C{'%2C'.join(self.query_variables)}"
+                                f"&time%3E={self.query_start_date}&time%3C={self.query_end_date}"
+                                f"&latitude%3E={self.query_min_lat}&latitude%3C={self.query_max_lat}&longitude%3E={self.query_min_lon}&longitude%3C={self.query_max_lon}")
+            else:
+                s_var_dataset, s_var_value = next(iter(self.query_specific_variable.items()))
+                query_string = (f"{self.dataset.data_url}.{output_format}"
+                                f"?time%2Clatitude%2Clongitude%2C{'%2C'.join(self.query_variables)}"
+                                f"&time%3E={self.query_start_date}&time%3C={self.query_end_date}"
+                                f"&latitude%3E={self.query_min_lat}&latitude%3C={self.query_max_lat}&longitude%3E={self.query_min_lon}&longitude%3C={self.query_max_lon}"
+                                f"&{s_var_dataset}=\"{s_var_value}\"")
 
-        else:            
+        else:
             query_string = f"{self.dataset.data_url}.{output_format}?"
             for variable in self.query_variables:
                 query_string += f'{variable}[({self.query_start_date}):1:({self.query_end_date})]'
@@ -470,9 +559,10 @@ class ErddapRequest:
 
 class BrokerResponse():
     
-    def __init__(self, eovs):
+    def     __init__(self, eovs=None):
         self.eovs = eovs
         self.queries = None
+        self.sparql_results = None
         
     def __repr__(self):
         return f"BrokerResponse object with {len(self.queries)} results."
@@ -517,7 +607,13 @@ class BrokerResponse():
         else:
             logger.debug(f"Adding dataset {query.dataset.name} to existing dataframe.")
             self.queries = pd.concat([self.queries, query_line])
-    
+
+    def add_sparql_result(self, result):
+        if not isinstance(self.sparql_results, pd.DataFrame):
+            self.sparql_results = result.content
+        else:
+            self.sparql_results = pd.concat([self.sparql_results, result.content])
+
     def get_dataset(self, dataset_id):
         '''
         Returns the ErddapRequest object for the provided dataset ID.
@@ -613,4 +709,12 @@ class BrokerResponse():
             raise Exception(f"Dataset id {dataset_id} was not found in queries.")
         else:
             return self.queries.loc[dataset_id].query_object.download(output_format)
-            
+
+    def compile_results(self):
+        dfs = []
+        for index in list(dict.fromkeys(self.queries.index.tolist())):
+            for dataset in self.queries.loc[index].query_object:
+                data = dataset.get_nc_data()
+                if not str(data.getvalue()).startswith("b'Error"):
+                    dfs.append(xr.open_dataset(data).to_dataframe())
+        return pd.concat(dfs)
