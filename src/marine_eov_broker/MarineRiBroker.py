@@ -394,60 +394,6 @@ class MarineBroker:
 
         return response
 
-    def submit_argo_sparql_query(self,
-                                 query,
-                                 endpoint,
-                                 eovs,
-                                 query_start_date,
-                                 query_end_date,
-                                 query_min_lon,
-                                 query_min_lat,
-                                 query_max_lon,
-                                 query_max_lat,
-                                 output_format) -> list:
-        wrapper = SPARQLWrapper(endpoint)
-        wrapper.setReturnFormat(JSON)
-        wrapper.setQuery(query)
-        results = wrapper.queryAndConvert()
-        response = BrokerResponse(eovs)
-        floats_wmo = []
-        for r in results["results"]["bindings"]:
-            # response.add_sparql_result(SPARQLRequest(r, endpoint))
-            lat = float(r["lat"]["value"])
-            lon = float(r["lon"]["value"])
-            # Do the spatial filter locally to avoid a SPARQL query timeout (or worse)
-            if query_min_lat < lat < query_max_lat and query_min_lon < lon < query_max_lon:
-                floats_wmo.append(r["platform_wmo"]["value"])
-        print(str(len(floats_wmo))+" floats found:")
-        print(floats_wmo)
-        with concurrent.futures.ThreadPoolExecutor(20) as executor:
-            futures = []
-            for argo_float in floats_wmo:
-                futures.append(
-                    executor.submit(self.setup_request_for_dataset,
-                                    self.datasets[0],
-                                    eovs,
-                                    query_start_date,
-                                    query_end_date,
-                                    query_min_lon,
-                                    query_min_lat,
-                                    query_max_lon,
-                                    query_max_lat,
-                                    output_format,
-                                    {"Argo": argo_float}
-                                    )
-                )
-
-            start = time.time()
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if result is not None:
-                    if response.queries is not None and result.dataset in response.get_datasets_list():
-                        response.queries.loc["ArgoFloats"].query_object.concat(result.dataset)
-                    else:
-                        response.add_query(result)
-        return response
-
     def submit_sparql_query(self,
                              query,
                              endpoint,
@@ -610,24 +556,6 @@ class ErddapRequest:
             out.write(resp.content)
         return True
 
-class SPARQLRequest:
-    def __init__(self, result, endpoint):
-        if endpoint == "https://sparql.ifremer.fr/argo/query":
-            self.URL = "https://data-argo.ifremer.fr/" + result["download"]["value"].replace(
-                "ftp://ftp.ifremer.fr/ifremer/argo/", "")
-            try:
-                self.content = self.to_pandas_dataframe(requests.get(self.URL).content)
-            except:
-                self.content = pd.DataFrame()
-
-    def get_nc_data(self, content):
-        return io.BytesIO(content)
-
-    def to_pandas_dataframe(self, content):
-        return self.to_xarray(content).to_dataframe()
-
-    def to_xarray(self, content):
-        return xr.open_dataset(self.get_nc_data(content))
 
 class BrokerResponse():
     
