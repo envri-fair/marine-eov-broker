@@ -1,0 +1,47 @@
+{# Jinja Template --> Sparql Query
+ | Within a bounding box and a time range search for platforms
+ | variables in template:
+ |   - start_date: start date of query
+ |   - end_date: end date of query
+ |   - min_lon: minimum longitude for query
+ |   - min_lat: minimum latitude for query
+ |   - max_lon: maximum longitude for query
+ |   - max_lat: maximum latitude for query
+#}
+
+
+
+
+prefix geo: <https://www.w3.org/2003/01/geo/wgs84_pos#>
+prefix owl: <http://www.w3.org/2002/07/owl#>
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> 
+prefix ssn: <http://www.w3.org/ns/ssn/> 
+prefix xml: <http://www.w3.org/XML/1998/namespace> 
+prefix xsd: <http://www.w3.org/2001/XMLSchema#> 
+prefix argo: <https://co.ifremer.fr/co/argo-linked-data/doc/argo-floats.ttl#> 
+prefix foaf: <http://xmlns.com/foaf/0.1/> 
+prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> 
+prefix sosa: <http://www.w3.org/ns/sosa/>
+prefix nerc: <http://vocab.nerc.ac.uk/collection/>
+prefix dct: <http://purl.org/dc/terms/>
+prefix prov: <https://www.w3.org/TR/prov-o/>
+prefix dcat: <http://www.w3.org/ns/dcat#>
+prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?platform_number ?lat ?lon WHERE { 
+?float a dcat:Dataset;
+       dct:identifier ?platform_number;
+       argo:cycle ?cycle;
+       sosa:hosts ?sensor.
+?sensor sosa:observes <http://vocab.nerc.ac.uk/collection/R03/current/DOXY>.
+?cycle argo:startDate ?date;
+       geo:latitude ?lat;
+       geo:longitude ?lon.
+
+FILTER(?lat >= {{ min_lat }})
+FILTER(?lat <= {{ max_lat }})
+FILTER(?lon >= {{ min_lon }})
+FILTER(?lon <= {{ max_lon }})
+FILTER(?date >= "{{ start_date }}"^^xsd:date)
+FILTER(?date <= "{{ end_date }}"^^xsd:date)
+}
