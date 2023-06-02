@@ -1,8 +1,11 @@
 from pykg2tbl.j2.jinja_sparql_builder import J2SparqlBuilder
+from pysubyt.j2.functions import Filters, Functions
 
 DEFAULT_TEMPLATE_FOLDER = "src/marine_eov_broker/j2_templates"
 
-j2sqb = J2SparqlBuilder(DEFAULT_TEMPLATE_FOLDER)
+j2sqb = J2SparqlBuilder(
+    DEFAULT_TEMPLATE_FOLDER, j2_filters=Filters, j2_functions=Functions
+)
 
 
 list_of_EVs = [
