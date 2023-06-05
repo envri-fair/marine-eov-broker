@@ -1,7 +1,7 @@
 import sys
 
-from . import ErddapMarineRI
-from .NVSQueries import query_strings
+from marine_eov_broker.ErddapMarineRI import ErddapDataset
+from marine_eov_broker.NVSQueries import DEFAULT_QUERY_STRINGS, EOV_LIST
 import pandas as pd
 import requests
 # from urllib.error import HTTPError
@@ -21,7 +21,6 @@ INPUT_DATE_FORMATS = ["%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%SZ",
 
 ERDDAP_OUTPUT_FORMATS = ["csv", "geoJson", "json", "nc", "ncCF", "odvTxt"]
 # EOV_LIST = ['EV_OXY', 'EV_SEATEMP', 'EV_SALIN', 'EV_CURR', 'EV_CHLA', 'EV_CO2', 'EV_NUTS']
-EOV_LIST = ['EV_OXY', 'EV_SEATEMP', 'EV_SALIN']
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +117,7 @@ class MarineBroker:
         dataset_id : (str) Erddap dataset ID
         """
         start = time.time()
-        erddap_dataset = ErddapMarineRI.ErddapDataset(erddap_server, dataset_id)
+        erddap_dataset = ErddapDataset(erddap_server, dataset_id)
         logger.debug(f"Loaded {dataset_id} in {time.time() - start} seconds.")
         return erddap_dataset  
     
@@ -146,7 +145,7 @@ class MarineBroker:
         sparql = SPARQLWrapper(self.vocabularies_server)
 
         logging.info(f"Querying vocabulary server for EOV : {eov}")
-        sparql.setQuery(query_strings[eov])
+        sparql.setQuery(DEFAULT_QUERY_STRINGS[eov])
         sparql.setReturnFormat(JSON)
         response = sparql.query().convert()
         return response
@@ -165,8 +164,8 @@ class MarineBroker:
         """
 
         found_eov = ""
-        P01 = [v['P01notation']['value'] for v in eov_vocabs["results"]["bindings"]]
-        P02 = [v['P02']['value'] for v in eov_vocabs["results"]["bindings"]]
+        P01 = [v['P01not']['value'] for v in eov_vocabs["results"]["bindings"]]
+        P02 = [v['P02not']['value'] for v in eov_vocabs["results"]["bindings"]]
         
 #         found_vars = [dataset.parameters[i] for i in P01 if i in dataset.parameters.keys()]
         found_vars = []

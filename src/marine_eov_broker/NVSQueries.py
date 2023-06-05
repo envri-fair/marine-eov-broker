@@ -8,7 +8,7 @@ j2sqb = J2SparqlBuilder(
 )
 
 
-list_of_EVs = [
+EOV_LIST = [
     "EV_SEATEMP",
     "EV_SALIN",
     "EV_OXY",
@@ -20,6 +20,6 @@ list_of_EVs = [
 
 
 DEFAULT_QUERY_STRINGS = {
-    key: j2sqb.build_sparql_query("eov_cleaned.sparql", **{"eov": key})
-    for key in list_of_EVs
+    key: j2sqb.build_sparql_query("eov_query.sparql", **{"eov": key})
+    for key in EOV_LIST
 }
