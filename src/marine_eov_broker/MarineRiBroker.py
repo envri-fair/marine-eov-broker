@@ -42,7 +42,8 @@ class MarineBroker:
                                           "SDC_MED_CLIM_TS_V2_s_whole_period",
                                           "SDC_NAT_CLIM_TS_V2_050_m", "SDC_NAT_CLIM_TS_V2_050_s"],
         "http://erddap.emso.eu/erddap": None,
-        "https://erddap.icos-cp.eu/erddap": None
+        "https://erddap.icos-cp.eu/erddap": None,
+        "https://erddap.eurobis.org/erddap": None,
     }
     DEFAULT_SPARQL_ENDPOINTS = {
         "Argo": "https://sparql.ifremer.fr/argo/query"
