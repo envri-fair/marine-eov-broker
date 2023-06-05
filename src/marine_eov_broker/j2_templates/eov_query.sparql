@@ -1,0 +1,71 @@
+{# Jinja Template --> Sparql Query
+ | Find p01 params that match the attributes of the eov
+ | variables in template:
+ |   - eov: the eov code to look for
+#}
+
+
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX pav: <http://purl.org/pav/>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX puv: <https://w3id.org/env/puv#>
+
+select distinct  ?p01_mem ?P01not ?p01lbl ?R03not ?P09not ?P02not
+where {
+  # the eov we look for - injected by template :
+  bind (<http://vocab.nerc.ac.uk/collection/A05/current/{{ eov }}/> as ?eov)  
+  # the collections we use:
+  bind (<http://vocab.nerc.ac.uk/collection/P01/current/> as ?p01)         
+  bind (<http://vocab.nerc.ac.uk/collection/P02/current/> as ?p02)
+  bind (<http://vocab.nerc.ac.uk/collection/P09/current/> as ?p09)
+  bind (<http://vocab.nerc.ac.uk/collection/S07/current/> as ?s07)
+  bind (<http://vocab.nerc.ac.uk/collection/R03/current/> as ?r03)
+  
+  # the core of the query is looking for p01_members that match the EOV definition
+  
+  # .0. start with all p01 members that are not deprecated
+  ?p01  skos:member ?p01_mem  .
+  ?p01_mem owl:deprecated ?depr . FILTER((str(?depr)="false"))
+
+  # .1. not sure why - but this exludes p01 that have a link to S07 members
+  NOT EXISTS {
+    ?p01_mem ?rel_s07 ?s07_mem .
+    ?s07 skos:member ?s07_mem .
+  }
+
+  # .2. now narrow down to the members that match with the eov_attributes
+  ?eov puv:matrix ?eov_matrix .
+  ?p01_mem ?rel1 ?eov_matrix .
+
+  ?eov puv:property ?eov_property  .
+  ?p01_mem ?rel2 ?eov_property .
+
+  # some eov (like EV_OXY and EV_CO2) have a chemical part 
+  # -- if that exists, then it should also be tied to the p01 member!
+  filter (
+  NOT EXISTS{?eov puv:chemicalObject ?eov_chemical .} || 
+  (EXISTS {?eov puv:chemicalObject ?eov_chemical . ?p01_mem ?rel3 ?eov_chemical .}) 
+  )
+  
+  # OUTPUT fetch
+  # for the remaining p01_members...
+  ?p01_mem skos:prefLabel ?p01lbl .FILTER(langMatches(lang(?p01lbl), "en")) .  # fetch the (english) label
+  ?p01_mem skos:notation ?P01not .                                             # fetch the code / id
+
+  optional {                                                                   # fetch if exists
+  	?p01_mem ?rel_r03 ?r03_mem .                                               #    a relation to 
+  	?r03 skos:member ?r03_mem .                                                #    a r03 member
+  	?r03_mem skos:notation ?R03not .                                           #    its code / id
+  }
+  optional {                                                                   # fetch if exists
+    ?p01_mem ?rel_p09 ?p09_mem .                                               #    a relation to 
+    ?p09 skos:member ?p09_mem .                                                #    a p09 member
+    ?p09_mem skos:notation ?P09not .                                           #    its code / id
+  }
+  optional {                                                                   # fetch if exists
+    ?p01_mem ?rel_p02 ?p02_mem .                                               #    a relation to 
+    ?p02 skos:member ?p02_mem .                                                #    a p02 member
+    ?p02_mem skos:notation ?P02not .                                           #    its code / id
+  }
+}
+
