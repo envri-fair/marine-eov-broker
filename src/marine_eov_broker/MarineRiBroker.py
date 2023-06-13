@@ -146,7 +146,7 @@ class MarineBroker:
         """
         kgsource = KGSource.build(self.vocabularies_server)
         query_result = kgsource.query(DEFAULT_QUERY_STRINGS[eov])
-        return query_result._data
+        return query_result.to_list()
 
 
     
