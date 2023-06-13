@@ -78,3 +78,18 @@ def test_submit_sparql_query():
     df = response.compile_results()
 
     assert len(df) == 5852
+
+
+def test_submit_sparql_named_query():
+    response = broker.submit_sparql_named_query(
+        query_filename,
+        broker.DEFAULT_SPARQL_ENDPOINTS["Argo"],
+        eovs_request,
+        "nc",
+        "platform_number",
+        "ArgoFloats-synthetic-BGC",
+        **variables
+    )
+    df = response.compile_results()
+
+    assert len(df) == 5852

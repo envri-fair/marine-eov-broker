@@ -14,7 +14,7 @@ import xarray as xr
 from pykg2tbl.kg2tbl import KGSource
 
 from marine_eov_broker.ErddapMarineRI import ErddapDataset
-from marine_eov_broker.NVSQueries import DEFAULT_QUERY_STRINGS, EOV_LIST
+from marine_eov_broker.NVSQueries import DEFAULT_QUERY_STRINGS, EOV_LIST, j2sqb
 
 INPUT_DATE_FORMATS = ["%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%SZ", 
                       "%Y%m%dT%H:%M:%SZ", "%Y-%m-%dT%H%M%SZ", 
@@ -400,6 +400,41 @@ class MarineBroker:
                     response.add_query(result)
 
         return response
+
+    def submit_sparql_named_query(
+        self,
+        query_name,
+        source,
+        eovs,
+        output_format,
+        linked_var,
+        linked_dataset,
+        **variables
+    ) -> list:
+        query = j2sqb.build_sparql_query(query_name, **variables)
+
+        endpoint = source
+        query_start_date = variables.get("start_date", None)
+        query_end_date = variables.get("end_date", None)
+        query_min_lon = variables.get("min_lon", None)
+        query_min_lat = variables.get("min_lat", None)
+        query_max_lon = variables.get("max_lon", None)
+        query_max_lat = variables.get("max_lat", None)
+        # The function called afterward could be refactored to not have all these hardcoded arguments.
+        return self.submit_sparql_query(
+            query,
+            endpoint,
+            eovs,
+            query_start_date,
+            query_end_date,
+            query_min_lon,
+            query_min_lat,
+            query_max_lon,
+            query_max_lat,
+            output_format,
+            linked_var,
+            linked_dataset,
+        )
 
     def submit_sparql_query(
         self,
