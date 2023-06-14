@@ -1,8 +1,8 @@
-from pyrdfj2 import J2RDFSyntaxBuilder
+from pykg2tbl import DefaultSparqlBuilder
 
 DEFAULT_TEMPLATE_FOLDER = "src/marine_eov_broker/j2_templates"
 
-j2sqb = J2RDFSyntaxBuilder(DEFAULT_TEMPLATE_FOLDER)
+j2sqb = DefaultSparqlBuilder(DEFAULT_TEMPLATE_FOLDER)
 
 
 EOV_LIST = [

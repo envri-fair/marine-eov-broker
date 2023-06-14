@@ -1,12 +1,12 @@
 from typing import Dict, List
 
 import pytest
-from pyrdfj2 import J2RDFSyntaxBuilder
+from pykg2tbl import DefaultSparqlBuilder
 
 from marine_eov_broker.MarineRiBroker import MarineBroker
 from marine_eov_broker.NVSQueries import DEFAULT_TEMPLATE_FOLDER
 
-j2sqb = J2RDFSyntaxBuilder(DEFAULT_TEMPLATE_FOLDER)
+j2sqb = DefaultSparqlBuilder(DEFAULT_TEMPLATE_FOLDER)
 
 
 broker = MarineBroker({"https://www.ifremer.fr/erddap": ["ArgoFloats-synthetic-BGC"]})
