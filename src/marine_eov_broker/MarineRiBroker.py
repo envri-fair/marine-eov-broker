@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import requests
 import xarray as xr
-from pykg2tbl.kg2tbl import KGSource
+from pykg2tbl import KGSource
 
 from marine_eov_broker.ErddapMarineRI import ErddapDataset
 from marine_eov_broker.NVSQueries import DEFAULT_QUERY_STRINGS, EOV_LIST, j2sqb
@@ -411,7 +411,7 @@ class MarineBroker:
         linked_dataset,
         **variables
     ) -> list:
-        query = j2sqb.build_sparql_query(query_name, **variables)
+        query = j2sqb.build_syntax(query_name, **variables)
 
         endpoint = source
         query_start_date = variables.get("start_date", None)

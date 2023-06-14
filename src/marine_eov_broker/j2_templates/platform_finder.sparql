@@ -42,6 +42,6 @@ FILTER(?lat >= {{ min_lat }})
 FILTER(?lat <= {{ max_lat }})
 FILTER(?lon >= {{ min_lon }})
 FILTER(?lon <= {{ max_lon }})
-FILTER(?date >= {{ start_date | ttl("xsd:date") }})
-FILTER(?date <= {{ end_date | ttl("xsd:date") }})
+FILTER(?date >= {{ start_date | xsd("xsd:date") }})
+FILTER(?date <= {{ end_date | xsd("xsd:date") }})
 }

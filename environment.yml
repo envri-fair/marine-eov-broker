@@ -27,4 +27,4 @@ dependencies:
   - yaml
   - notebook
   - pykg2tbl
-  - pysubyt
+  - pyrdfj2

@@ -1,20 +1,15 @@
 from typing import Dict, List
 
 import pytest
-from pykg2tbl.j2.jinja_sparql_builder import J2SparqlBuilder
-from pysubyt.j2.functions import Filters, Functions
+from pyrdfj2 import J2RDFSyntaxBuilder
 
 from marine_eov_broker.MarineRiBroker import MarineBroker
 from marine_eov_broker.NVSQueries import DEFAULT_TEMPLATE_FOLDER
 
-j2sqb = J2SparqlBuilder(
-    DEFAULT_TEMPLATE_FOLDER, j2_filters=Filters, j2_functions=Functions
-)
+j2sqb = J2RDFSyntaxBuilder(DEFAULT_TEMPLATE_FOLDER)
 
 
-broker = MarineBroker(
-    {"https://www.ifremer.fr/erddap": ["ArgoFloats-synthetic-BGC"]}
-)
+broker = MarineBroker({"https://www.ifremer.fr/erddap": ["ArgoFloats-synthetic-BGC"]})
 
 
 eovs_request = ["EV_SALIN", "EV_OXY", "EV_SEATEMP"]
@@ -37,7 +32,7 @@ variables = {
     "max_lat": max_lat,
 }
 
-qry = j2sqb.build_sparql_query(query_filename, **variables)
+qry = j2sqb.build_syntax(query_filename, **variables)
 
 
 @pytest.mark.parametrize("eov", eovs_request)
