@@ -16,7 +16,9 @@ dependencies = [
   'requests >= 2.26.0',
   'shapely >= 1.8.0',
   'sparqlwrapper >= 1.8.5',
-  'xarray >= 0.20.1'
+  'xarray >= 0.20.1',
+  'pykg2tbl >= 0.0.1',
+  'pysubyt >= 0.0.0'
 ]
 authors = [
     {name = "Antoine QUERIC"},
