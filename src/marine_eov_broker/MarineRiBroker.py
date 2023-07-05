@@ -1,19 +1,20 @@
-import sys
-
-from marine_eov_broker.ErddapMarineRI import ErddapDataset
-from marine_eov_broker.NVSQueries import DEFAULT_QUERY_STRINGS, EOV_LIST
-import pandas as pd
-import requests
-# from urllib.error import HTTPError
-import io
-import xarray as xr
-import numpy as np
-import time
-import logging
 import concurrent.futures
 import datetime
-from SPARQLWrapper import SPARQLWrapper, JSON
+# from urllib.error import HTTPError
+import io
+import logging
+import sys
+import time
 import traceback
+
+import numpy as np
+import pandas as pd
+import requests
+import xarray as xr
+from pykg2tbl import KGSource
+
+from marine_eov_broker.ErddapMarineRI import ErddapDataset
+from marine_eov_broker.NVSQueries import DEFAULT_QUERY_STRINGS, EOV_LIST, j2sqb
 
 INPUT_DATE_FORMATS = ["%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%SZ", 
                       "%Y%m%dT%H:%M:%SZ", "%Y-%m-%dT%H%M%SZ", 
@@ -138,52 +139,54 @@ class MarineBroker:
     
     def query_vocabularies(self, eov) -> dict:
         """
-        Query vocabulary server and search for P01 parameters names corresponding to a A05 EOV term.
-        
+        Query vocabulary server and search for P01 parameters names corresponding
+            to a A05 EOV term.
+
         Arguments :
         eov: variable string
         """
-        sparql = SPARQLWrapper(self.vocabularies_server)
+        kgsource = KGSource.build(self.vocabularies_server)
+        query_result = kgsource.query(DEFAULT_QUERY_STRINGS[eov])
+        return query_result.to_list()
 
-        logging.info(f"Querying vocabulary server for EOV : {eov}")
-        sparql.setQuery(DEFAULT_QUERY_STRINGS[eov])
-        sparql.setReturnFormat(JSON)
-        response = sparql.query().convert()
-        return response
 
     
     def find_eov_in_dataset(self, dataset, eov, eov_vocabs):
         """
         Looks through the dataset metadata to find a matching variable name.
         The match is made on the "sdn_parameter_urn" variable attribute.
-        
+
         Arguments:
         dataset: ErddapDataset object
         eov_vocabs: dictionnary containing vocabulary server response.
-        
+
         Returns : variable name if a match is made, otherwise False.
         """
 
         found_eov = ""
-        P01 = [v['P01not']['value'] for v in eov_vocabs["results"]["bindings"]]
-        P02 = [v['P02not']['value'] for v in eov_vocabs["results"]["bindings"]]
-        
-#         found_vars = [dataset.parameters[i] for i in P01 if i in dataset.parameters.keys()]
+        P01 = [v["P01not"] for v in eov_vocabs]
+        P02 = [v["P02not"] for v in eov_vocabs]
+
+        # found_vars = [dataset.parameters[i] for i in P01 if i in dataset.parameters.keys()]
         found_vars = []
         for i in P01:
             if i in dataset.parameters.keys():
                 eov_param_name_in_dataset = dataset.parameters[i]
                 found_vars.append(eov_param_name_in_dataset)
                 if eov in dataset.found_eovs.keys():
-                    if eov_param_name_in_dataset not in dataset.found_eovs[eov]: 
+                    if eov_param_name_in_dataset not in dataset.found_eovs[eov]:
                         dataset.found_eovs[eov].append(eov_param_name_in_dataset)
                     else:
                         continue
                 else:
                     dataset.found_eovs[eov] = [eov_param_name_in_dataset]
-        
+
         if len(found_vars) == 0:
-            found_vars = [dataset.parameters[i] for i in P02 if i in dataset.parameters.keys()]
+            found_vars = [
+                dataset.parameters[i]
+                for i in P02
+                if i in dataset.parameters.keys()
+            ]
             for i in P02:
                 # if dataset.name == "SDC_GLO_AGG_V2":
                 #     logging.debug(f"{dataset.name} :: P02 param : {i}")
@@ -191,8 +194,13 @@ class MarineBroker:
                     eov_param_name_in_dataset = dataset.parameters[i]
                     found_vars.append(eov_param_name_in_dataset)
                     if eov in dataset.found_eovs.keys():
-                        if eov_param_name_in_dataset not in dataset.found_eovs[eov]: 
-                            dataset.found_eovs[eov].append(eov_param_name_in_dataset)
+                        if (
+                            eov_param_name_in_dataset
+                            not in dataset.found_eovs[eov]
+                        ):
+                            dataset.found_eovs[eov].append(
+                                eov_param_name_in_dataset
+                            )
                         else:
                             continue
                     else:
@@ -203,14 +211,14 @@ class MarineBroker:
                 #         dataset.found_eovs[eov].append(dataset.parameters[i])
                 #     else:
                 #         dataset.found_eovs[eov] = [dataset.parameters[i]]
-            
+
         if found_vars is not None and len(found_vars) > 0:
-#             logging.debug(f"Found vars for dataset {dataset.name} : {np.unique(found_vars)}")
+            # logging.debug(f"Found vars for dataset {dataset.name} : {np.unique(found_vars)}")
             return np.unique(found_vars)
         else:
-#             logging.debug(f"No vars found for dataset {dataset.name}")
+            # logging.debug(f"No vars found for dataset {dataset.name}")
             return []
-            
+
         # Nothing was found while looping through vocabularies:
         return None
     
@@ -394,51 +402,94 @@ class MarineBroker:
 
         return response
 
-    def submit_sparql_query(self,
-                             query,
-                             endpoint,
-                             eovs,
-                             query_start_date,
-                             query_end_date,
-                             query_min_lon,
-                             query_min_lat,
-                             query_max_lon,
-                             query_max_lat,
-                             output_format,
-                             linked_var,
-                             linked_dataset,) -> list:
-        wrapper = SPARQLWrapper(endpoint)
-        wrapper.setReturnFormat(JSON)
-        wrapper.setQuery(query)
-        results = wrapper.queryAndConvert()
+    def submit_sparql_named_query(
+        self,
+        query_name,
+        source,
+        eovs,
+        output_format,
+        linked_var,
+        linked_dataset,
+        **variables
+    ) -> list:
+        query = j2sqb.build_syntax(query_name, **variables)
+
+        endpoint = source
+        query_start_date = variables.get("start_date", None)
+        query_end_date = variables.get("end_date", None)
+        query_min_lon = variables.get("min_lon", None)
+        query_min_lat = variables.get("min_lat", None)
+        query_max_lon = variables.get("max_lon", None)
+        query_max_lat = variables.get("max_lat", None)
+        # The function called afterward could be refactored to not have all these hardcoded arguments.
+        return self.submit_sparql_query(
+            query,
+            endpoint,
+            eovs,
+            query_start_date,
+            query_end_date,
+            query_min_lon,
+            query_min_lat,
+            query_max_lon,
+            query_max_lat,
+            output_format,
+            linked_var,
+            linked_dataset,
+        )
+
+    def submit_sparql_query(
+        self,
+        query,
+        endpoint,
+        eovs,
+        query_start_date,
+        query_end_date,
+        query_min_lon,
+        query_min_lat,
+        query_max_lon,
+        query_max_lat,
+        output_format,
+        linked_var,
+        linked_dataset,
+    ) -> list:
+        # Build Knowledge source from endpoint
+        #   (could be a list of endpoint, files)
+        kgsource = KGSource.build(endpoint)
+        # Query response as a QueryResult class
+        query_result = kgsource.query(query)
+        # Get the contents of the linked_var as a list
+        content_var = query_result.to_dict()[linked_var]
         response = BrokerResponse(eovs)
-        content_var = []
-        for r in results["results"]["bindings"]:
-            content_var.append(r[linked_var]["value"])
         with concurrent.futures.ThreadPoolExecutor(20) as executor:
             futures = []
             for linked_atom in content_var:
                 futures.append(
-                    executor.submit(self.setup_request_for_dataset,
-                                    self.datasets[0],
-                                    eovs,
-                                    query_start_date,
-                                    query_end_date,
-                                    query_min_lon,
-                                    query_min_lat,
-                                    query_max_lon,
-                                    query_max_lat,
-                                    output_format,
-                                    {linked_var: linked_atom}
-                                    )
+                    executor.submit(
+                        self.setup_request_for_dataset,
+                        self.datasets[0],
+                        eovs,
+                        query_start_date,
+                        query_end_date,
+                        query_min_lon,
+                        query_min_lat,
+                        query_max_lon,
+                        query_max_lat,
+                        output_format,
+                        {linked_var: linked_atom},
+                    )
                 )
 
             start = time.time()
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
                 if result is not None:
-                    if response.queries is not None and result.dataset in response.get_datasets_list():
-                        response.queries.loc[linked_dataset].query_object.concat(result.dataset)
+                    if (
+                        response.queries is not None
+                        and result.dataset in response.get_datasets_list()
+                    ):
+                        response.queries.loc[linked_dataset].query_object.concat(
+                            result.dataset
+                        )
                     else:
                         response.add_query(result)
         return response

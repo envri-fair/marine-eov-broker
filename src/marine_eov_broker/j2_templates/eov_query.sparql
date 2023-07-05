@@ -51,7 +51,7 @@ WHERE {
   ?p01_mem skos:notation ?P01not .                                             # fetch the code / id
 
   optional {                                                                   # fetch if exists
-    ?p01_mem ?rel_r03 ?r03_mem .                                               #    a relation to
+    ?p01_mem ?rel_r03 ?r03_mem .                                               #    a relation to 
     ?r03 skos:member ?r03_mem .                                                #    a r03 member
     ?r03_mem skos:notation ?R03not .                                           #    its code / id
   }

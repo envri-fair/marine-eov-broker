@@ -23,8 +23,7 @@ dependencies:
   - scipy
   - setuptools
   - shapely
-  - sparqlwrapper
   - xarray
   - yaml
   - notebook
-
+  - pykg2tbl

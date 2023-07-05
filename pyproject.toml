@@ -15,10 +15,8 @@ dependencies = [
   'pandas >= 1.3.4',
   'requests >= 2.26.0',
   'shapely >= 1.8.0',
-  'sparqlwrapper >= 1.8.5',
   'xarray >= 0.20.1',
   'pykg2tbl >= 0.0.1',
-  'pysubyt >= 0.0.0'
 ]
 authors = [
     {name = "Antoine QUERIC"},
@@ -27,3 +25,7 @@ authors = [
 
 [project.urls]
 'Bug Tracker' = "https://github.com/twnone/marine-eov-broker/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests",]
+pythonpath = ["."]
