@@ -9,10 +9,10 @@ EOV_LIST = [
     "EV_SEATEMP",
     "EV_SALIN",
     "EV_OXY",
-    "EV_CURR",
-    "EV_CHLA",
-    "EV_CO2",
-    "EV_NUTS",
+    # "EV_CURR",
+    # "EV_CHLA",
+    # "EV_CO2",
+    # "EV_NUTS",
 ]
 
 
