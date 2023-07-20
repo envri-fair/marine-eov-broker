@@ -1,0 +1,79 @@
+{#- Jinja Template --> Sparql Query
+ | Find p01 params that match the attributes of the eov
+ | variables in template:
+ |   - eov: the eov code to look for (ie A05 suffix code)
+ |   - (optional) obj: a list of specific 'object of interest' to narrow down  (ie S27 suffix code)
+-#}
+PREFIX iop: <https://w3id.org/iadopt/ont#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+
+SELECT 
+    (?p01_mem as ?ConceptIRI) 
+    (?p01_not as ?P01ID)
+    (?p01_lbl as ?P01Label)
+    (group_concat(?r03_note;separator=",") as ?R03IDS) 
+    (group_concat(?p09_note;separator=",") as ?P09IDS) 
+    (group_concat(?p02_note;separator=",") as ?P02IDS) 
+WHERE {
+  {#- the eov we look for - injected by template :                           #}
+  BIND (<http://vocab.nerc.ac.uk/collection/A05/current/{{ eov }}/> as ?eov)
+  {#- the collections we use:                                                #}
+  BIND (<http://vocab.nerc.ac.uk/collection/P01/current/> as ?p01)
+  BIND (<http://vocab.nerc.ac.uk/collection/P02/current/> as ?p02)
+  BIND (<http://vocab.nerc.ac.uk/collection/P09/current/> as ?p09)
+  BIND (<http://vocab.nerc.ac.uk/collection/R03/current/> as ?r03)
+
+  {#- the core is looking for p01_members that match the EOV definition      #}
+  {#-   .0. start with all p01 members that are not deprecated               #}
+  ?p01 skos:member ?p01_mem  .
+  ?p01_mem owl:deprecated ?depr . FILTER((str(?depr)="false"))
+
+  {#-   .1. narrow down to members matching the eov_attributes using iop     #} 
+  ?eov iop:hasApplicableObjectOfInterest ?iop_ooi.
+  ?p01_mem iop:hasObjectOfInterest ?iop_ooi.
+
+  ?eov iop:hasApplicableProperty ?iop_prop.     
+  ?p01_mem iop:hasProperty ?iop_prop.
+
+  {#-   .2. if a specific object was specified, narrow further down to that  #} 
+  {%- if obj and obj|length > 0 %}
+  FILTER(?iop_ooi IN (
+    {%- for o in obj%}
+    <http://vocab.nerc.ac.uk/collection/S27/current/{{ o }}/>{{ ", " if not loop.last else "" }}
+    {%- endfor %} ) )
+  {%- endif %}
+
+  optional{
+    ?eov iop:hasApplicableMatrix  ?iop_mat .
+  	?p01_mem  iop:hasMatrix ?iop_mat      .
+  }
+
+  optional{
+    ?eov iop:hasConstraint ?iop_cons .
+  	?p01_mem  iop:hasConstraint ?iop_cons .
+  }
+
+  {#- OUTPUT fetch
+   #  for the remaining p01_members...                                       #}
+  ?p01_mem skos:prefLabel ?p01_lbl .FILTER(langMatches(lang(?p01_lbl), "en")) .{#- fetch the (english) label #}
+  ?p01_mem skos:notation ?p01_not .                                            {#- fetch the code / id       #}
+
+  optional {                                   {#- fetch if exists           #}
+    ?p01_mem ?rel_r03 ?r03_mem .                                               {#-    a relation to          #}
+    ?r03 skos:member ?r03_mem .                                                {#-    a r03 member           #}
+    ?r03_mem skos:notation ?r03_note .                                         {#-    its code / id          #}
+  }
+  optional {                                   {#- fetch if exists           #}
+    ?p01_mem ?rel_p09 ?p09_mem .                                               {#-    a relation to          #} 
+    ?p09 skos:member ?p09_mem .                                                {#-    a p09 member           #} 
+    ?p09_mem skos:notation ?p09_note .                                         {#-    its code / id          #} 
+  }
+  optional {                                   {#- fetch if exists           #} 
+    ?p01_mem ?rel_p02 ?p02_mem .                                               {#-    a relation to          #} 
+    ?p02 skos:member ?p02_mem .                                                {#-    a p02 member           #} 
+    ?p02_mem skos:notation ?p02_note .                                         {#-    its code / id          #}
+  }
+}
+group by ?p01_mem ?p01_not ?p01_lbl
+order by ?p01_mem
