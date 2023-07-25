@@ -53,7 +53,7 @@ broker = MarineRiBroker.MarineBroker(
 )
 ```
   
-The default erddap servers configured are the following (as of 2022-01-28):  
+The default erddap servers configured are the following (as of 2023-07-25):  
 ```
 {
     "https://www.ifremer.fr/erddap": ["ArgoFloats", "ArgoFloats-synthetic-BGC", 
@@ -63,7 +63,8 @@ The default erddap servers configured are the following (as of 2022-01-28):
                                       "SDC_BLS_CLIM_TS_V2_m", "SDC_BLS_CLIM_TS_V2_s"
                                       ],
     "http://erddap.emso.eu/erddap": None,
-    "https://erddap.icos-cp.eu/erddap": ["icos11ss20211206"]
+    "https://erddap.icos-cp.eu/erddap": None,
+    "https://erddap.eurobis.org/erddap": None,    
 }
 ```  
   
