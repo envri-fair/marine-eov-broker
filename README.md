@@ -53,23 +53,26 @@ broker = MarineRiBroker.MarineBroker(
 )
 ```
   
-The default erddap servers configured are the following (as of 2023-07-25):  
+
+The default erddap servers configured are the following (as of 2023-08-03):  
 ```
 {
-    "https://www.ifremer.fr/erddap": ["ArgoFloats", "ArgoFloats-synthetic-BGC", 
-                                      "SDC_BAL_CLIM_TS_V2_m", "SDC_BAL_CLIM_TS_V2_s",
-                                      "SDC_GLO_AGG_V2", 
-                                      "SDC_GLO_CLIM_TS_V2_1", "SDC_GLO_CLIM_TS_V2_2",
-                                      "SDC_BLS_CLIM_TS_V2_m", "SDC_BLS_CLIM_TS_V2_s"
-                                      ],
-    "http://erddap.emso.eu/erddap": None,
-    "https://erddap.icos-cp.eu/erddap": None,
-    "https://erddap.eurobis.org/erddap": None,    
+        "https://www.ifremer.fr/erddap": ["ArgoFloats", "ArgoFloats-synthetic-BGC", "SDC_BAL_CLIM_TS_V2_m", ...],
+        "http://erddap.emso.eu/erddap": None,
+        "https://erddap.icos-cp.eu/erddap": "[icos26na20170409SocatEnhanced", ...],
+        "https://erddap.eurobis.org/erddap": ["obis_obis", ...],
 }
 ```  
   
 Specifying **None** instead of the datasets list will make the broker query all the datasets ; make sure it is a reasonable choice considering the number of datasets available in an erddap server.
-  
+
+The default SPARQL Endpoint configured are the following (as of 2023-08-03):  
+```
+{
+        "Argo": "https://sparql.ifremer.fr/argo/query"
+    }
+...
+
 #### Querying datasets
   
 Once the broker is started, you can submit a query with the following :
